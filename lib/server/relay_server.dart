@@ -24,6 +24,8 @@ class RelayServerConfig {
         sshRelayHost =
             env['SSH_RELAY_HOST'] ?? 'debug-tunnel@softapp.vietsov.com.vn',
         sshRelayPort = _int(env, 'SSH_RELAY_PORT', 2222),
+        clientDownloadUrl =
+            env['CLIENT_DOWNLOAD_URL'] ?? '/download/client_debug_agent.exe',
         heartbeatTimeout = Duration(
           seconds: _int(env, 'HEARTBEAT_TIMEOUT_SECONDS', 60),
         ),
@@ -42,6 +44,7 @@ class RelayServerConfig {
   final bool sessionListRequiresAuth;
   final String sshRelayHost;
   final int sshRelayPort;
+  final String clientDownloadUrl;
   final Duration heartbeatTimeout;
   final Duration sessionTimeout;
 
@@ -127,6 +130,7 @@ class RelayServer {
             _registry.sessions,
             sshHost: config.sshRelayHost,
             sshPort: config.sshRelayPort,
+            clientDownloadUrl: config.clientDownloadUrl,
             canDisconnect: config.adminPassword != null,
           ),
         );

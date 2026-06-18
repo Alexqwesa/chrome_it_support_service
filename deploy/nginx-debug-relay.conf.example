@@ -23,6 +23,21 @@ server {
         proxy_pass http://127.0.0.1:9998/health;
     }
 
+    root html/chrome-debug-relay;
+    # Windows user agent download.
+    location = /download/client_debug_agent.exe {
+
+        allow 10.0.0.0/8;
+        allow 192.168.0.0/16;
+        deny all;
+
+        # if no download dir use:
+        #alias html/chrome-debug-relay/client_debug_agent.exe;
+
+        default_type application/octet-stream;
+        add_header Content-Disposition 'attachment; filename="client_debug_agent.exe"';
+    }
+
     # Read-only connection list for the local network.
     location = /debug-sessions {
         allow 10.0.0.0/8;

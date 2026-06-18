@@ -6,6 +6,7 @@ String renderSessionsPage(
   Iterable<RelaySession> sessions, {
   required String sshHost,
   required int sshPort,
+  required String clientDownloadUrl,
   required bool canDisconnect,
 }) {
   final rows = sessions.map((session) {
@@ -53,6 +54,10 @@ String renderSessionsPage(
 <body>
   <h1>Chrome Debug Sessions</h1>
   <p class="warning">Close the SSH tunnel after support is finished.</p>
+  <p>
+    User agent download:
+    <a href="${_escape(clientDownloadUrl)}" download>client_debug_agent.exe</a>
+  </p>
   <table>
     <thead><tr><th>Status</th><th>PC name</th><th>User</th><th>Server local port</th><th>Connected at</th><th>Duration</th><th>Last heartbeat</th><th>Actions</th></tr></thead>
     <tbody>${rows.isEmpty ? '<tr><td colspan="8">No active sessions.</td></tr>' : rows}</tbody>

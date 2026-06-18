@@ -48,9 +48,9 @@ secret, rotate it when exposed, and do not use it as an admin credential.
 
 3. Install the nginx example from
    `deploy/nginx-debug-relay.conf.example`. It exposes the read-only session
-   list to configured internal networks and protects only the optional admin
-   mutation endpoint. If `ADMIN_PASSWORD` is configured, create the Basic-auth
-   file using the same username/password:
+   list and client exe download to configured internal networks, and protects
+   only the optional admin mutation endpoint. If `ADMIN_PASSWORD` is
+   configured, create the Basic-auth file using the same username/password:
 
    ```bash
    sudo htpasswd -c /etc/nginx/.htpasswd-debug-relay admin
@@ -62,9 +62,11 @@ secret, rotate it when exposed, and do not use it as an admin credential.
    backend on `127.0.0.1:9998`. This avoids a port conflict when nginx and the
    Dart relay run on the same host.
 
+
 4. Adjust the nginx `allow` networks before deployment. `/agent` must remain
-   reachable by supported user PCs, while `/debug-sessions` and
-   `GET /api/sessions` should be limited to the local network or IT VPN.
+   reachable by supported user PCs, while `/debug-sessions`,
+   `/download/client_debug_agent.exe`, and `GET /api/sessions` should be
+   limited to the local network or IT VPN.
 
 The service binds tunnel ports to `0.0.0.0` **inside the container** so Docker
 can publish them. `docker-compose.yml` publishes tunnel ports only to host
