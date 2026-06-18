@@ -1,4 +1,4 @@
-# Chrome IT Support Service
+﻿# Chrome IT Support Service
 
 Internal Chrome remote-debugging relay implemented in Dart. A Windows agent
 launches an isolated Chrome profile, connects outbound over WebSocket/WSS, and
@@ -77,37 +77,41 @@ keep it loopback-only when nginx is the public frontend.
 
 ## Restricted SSH setup
 
-If the SSH relay host is Linux, use the commands below. If it is Windows, use
-[deploy/windows-openssh-debug-tunnel-setup.md](C:\Users\user\StudioProjects\chrome_it_support_service\deploy\windows-openssh-debug-tunnel-setup.md).
+SSH runs in the `ssh-relay` Docker sidecar. No Windows OpenSSH service and no
+Windows `debug-tunnel` user are required.
 
-Create the forwarding-only account:
+Generate one keypair per operator on the operator PC:
 
-```bash
-sudo adduser --system --group --home /home/debug-tunnel debug-tunnel
-sudo mkdir -p /home/debug-tunnel/.ssh
-sudo touch /home/debug-tunnel/.ssh/authorized_keys
-sudo chown -R debug-tunnel:debug-tunnel /home/debug-tunnel
-sudo chmod 700 /home/debug-tunnel/.ssh
-sudo chmod 600 /home/debug-tunnel/.ssh/authorized_keys
+```powershell
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\vsp_debug_tunnel_ed25519" -C "vsp-debug-tunnel-$env:USERNAME"
 ```
 
-Add one public key per operator to `authorized_keys`. Do not share private keys.
-Append `deploy/sshd_config.debug-tunnel.example` to `/etc/ssh/sshd_config`,
-then validate and reload:
+Create the mounted authorized keys file and add each operator public key:
 
 ```bash
-sudo sshd -t
-sudo systemctl reload sshd  # use "ssh" on Debian/Ubuntu if required
+cp deploy/authorized_keys.example deploy/authorized_keys
+# Edit deploy/authorized_keys and add one .pub key per line.
+docker compose up -d --build ssh-relay
 ```
 
 Install `deploy/operator_ssh_config.example` in each operator's SSH config.
 This file is only a client-side convenience alias; it is not required on the
 server because the full command also works.
-Verify that a shell and arbitrary forwarding fail:
+The container applies the restricted settings from `deploy/sshd_config.docker`:
+public-key auth only, `ssh -L` only, no shell/session, no agent forwarding, and
+`PermitOpen` limited to `127.0.0.1:41000-41049`.
+
+Verify that allowed forwarding works:
 
 ```bash
-ssh -p 2222 debug-tunnel@softapp.vietsov.com.vn
-ssh -p 2222 -N -L 9333:127.0.0.1:22 debug-tunnel@softapp.vietsov.com.vn
+ssh -p 2223 -N -L 9333:127.0.0.1:41000 debug-tunnel@softapp.vietsov.com.vn
+```
+
+Verify that shell and arbitrary forwarding fail:
+
+```bash
+ssh -p 2223 debug-tunnel@softapp.vietsov.com.vn
+ssh -p 2223 -N -L 9333:127.0.0.1:22 debug-tunnel@softapp.vietsov.com.vn
 ```
 
 ## Build and run the Windows client
@@ -144,7 +148,7 @@ uses the first free port in `9222-9299`, and creates a temporary profile.
 4. Run the command, for example:
 
    ```bash
-   ssh -p 2222 -N -L 9333:127.0.0.1:41001 debug-tunnel@softapp.vietsov.com.vn
+   ssh -p 2223 -N -L 9333:127.0.0.1:41001 debug-tunnel@softapp.vietsov.com.vn
    ```
 
 5. Open `chrome://inspect`, choose **Configure**, and add `localhost:9333`.
@@ -152,25 +156,6 @@ uses the first free port in `9222-9299`, and creates a temporary profile.
 
 To verify forwarding without DevTools, open
 `http://127.0.0.1:9333/json/version`.
-
-## Local development
-
-```powershell
-$env:ADMIN_PASSWORD = "local-admin-password"
-$env:AGENT_ENROLLMENT_TOKEN = "local-agent-token"
-dart run bin/server.dart
-```
-
-In a second Windows shell:
-
-```powershell
-$env:RELAY_SERVER_URL = "http://127.0.0.1:9998"
-$env:AGENT_ENROLLMENT_TOKEN = "local-agent-token"
-dart run bin/client.dart
-```
-
-Open `http://127.0.0.1:9998/debug-sessions` and authenticate as `admin` with
-the configured admin password only if `SESSION_LIST_REQUIRES_AUTH=true`.
 
 ## Configuration
 
@@ -202,3 +187,4 @@ dart test
 powershell -ExecutionPolicy Bypass -File tool/build_clients.ps1
 docker compose config
 ```
+

@@ -24,7 +24,7 @@ void main() {
         'SERVER_PORT_START': '$tunnelPort',
         'SERVER_PORT_END': '$tunnelPort',
         'SSH_RELAY_HOST': 'debug-tunnel@softapp.vietsov.com.vn',
-        'SSH_RELAY_PORT': '2222',
+        'SSH_RELAY_PORT': '2223',
         'AGENT_ENROLLMENT_TOKEN': 'agent-test-token',
       }),
     );
@@ -69,7 +69,7 @@ void main() {
     expect(sessions.single['time_of_begin_of_connection'], isA<String>());
     expect(
       sessions.single['sshCommand'],
-      'ssh -p 2222 -N -L 9333:127.0.0.1:$port debug-tunnel@softapp.vietsov.com.vn',
+      'ssh -p 2223 -N -L 9333:127.0.0.1:$port debug-tunnel@softapp.vietsov.com.vn',
     );
 
     final operator = await Socket.connect(InternetAddress.loopbackIPv4, port);

@@ -1,0 +1,17 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-server ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --shell /usr/sbin/nologin debug-tunnel \
+    && mkdir -p /run/sshd /home/debug-tunnel/.ssh /etc/ssh/host_keys \
+    && chown -R debug-tunnel:debug-tunnel /home/debug-tunnel/.ssh \
+    && chmod 700 /home/debug-tunnel/.ssh
+
+COPY deploy/sshd_config.docker /etc/ssh/sshd_config
+COPY deploy/ssh-relay-entrypoint.sh /usr/local/bin/ssh-relay-entrypoint.sh
+
+RUN chmod +x /usr/local/bin/ssh-relay-entrypoint.sh
+
+EXPOSE 22
+ENTRYPOINT ["/usr/local/bin/ssh-relay-entrypoint.sh"]

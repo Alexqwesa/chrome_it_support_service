@@ -4,3 +4,6 @@ build/
 coverage/
 *.log
 .idea/
+deploy/authorized_keys
+deploy/ssh_host_keys/*
+!deploy/ssh_host_keys/.gitkeep

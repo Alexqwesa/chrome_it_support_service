@@ -1,0 +1,3 @@
+# Put one operator public key per line here.
+# Example:
+# ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... vsp-debug-tunnel-ivan

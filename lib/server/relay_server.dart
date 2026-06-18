@@ -23,7 +23,7 @@ class RelayServerConfig {
             _bool(env, 'SESSION_LIST_REQUIRES_AUTH', false),
         sshRelayHost =
             env['SSH_RELAY_HOST'] ?? 'debug-tunnel@softapp.vietsov.com.vn',
-        sshRelayPort = _int(env, 'SSH_RELAY_PORT', 2222),
+        sshRelayPort = _int(env, 'SSH_RELAY_PORT', 2223),
         clientDownloadUrl =
             env['CLIENT_DOWNLOAD_URL'] ?? '/download/client_debug_agent.exe',
         heartbeatTimeout = Duration(
