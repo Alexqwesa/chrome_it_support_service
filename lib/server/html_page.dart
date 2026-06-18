@@ -57,6 +57,8 @@ String renderSessionsPage(
   <p>
     User agent download:
     <a href="${_escape(clientDownloadUrl)}" download>client_debug_agent.exe</a>
+    |
+    <a href="/admin/keys">SSH key admin</a>
   </p>
   <table>
     <thead><tr><th>Status</th><th>PC name</th><th>User</th><th>Server local port</th><th>Connected at</th><th>Duration</th><th>Last heartbeat</th><th>Actions</th></tr></thead>

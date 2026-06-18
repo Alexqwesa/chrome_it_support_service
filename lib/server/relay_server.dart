@@ -6,6 +6,8 @@ import 'dart:typed_data';
 import '../shared/agent_protocol.dart';
 import '../shared/port_allocator.dart';
 import '../shared/tunnel_frames.dart';
+import 'admin_keys_page.dart';
+import 'authorized_keys_manager.dart';
 import 'html_page.dart';
 import 'session_registry.dart';
 
@@ -19,6 +21,9 @@ class RelayServerConfig {
         agentToken = _required(env, 'AGENT_ENROLLMENT_TOKEN'),
         adminUsername = env['ADMIN_USERNAME'] ?? 'admin',
         adminPassword = _optionalSecret(env, 'ADMIN_PASSWORD'),
+        authorizedKeysFile =
+            env['AUTHORIZED_KEYS_FILE'] ?? 'deploy/authorized_keys',
+        sshdReloadSignalFile = _optionalPath(env, 'SSHD_RELOAD_SIGNAL_FILE'),
         sessionListRequiresAuth =
             _bool(env, 'SESSION_LIST_REQUIRES_AUTH', false),
         sshRelayHost =
@@ -41,6 +46,8 @@ class RelayServerConfig {
   final String agentToken;
   final String adminUsername;
   final String? adminPassword;
+  final String authorizedKeysFile;
+  final String? sshdReloadSignalFile;
   final bool sessionListRequiresAuth;
   final String sshRelayHost;
   final int sshRelayPort;
@@ -76,14 +83,22 @@ class RelayServerConfig {
     }
     return value;
   }
+
+  static String? _optionalPath(Map<String, String> env, String key) {
+    final value = env[key]?.trim();
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
 }
 
 class RelayServer {
   RelayServer(this.config)
-      : _allocator = PortAllocator(config.portStart, config.portEnd);
+      : _allocator = PortAllocator(config.portStart, config.portEnd),
+        _keysManager = AuthorizedKeysManager(config.authorizedKeysFile);
 
   final RelayServerConfig config;
   final PortAllocator _allocator;
+  final AuthorizedKeysManager _keysManager;
   final SessionRegistry _registry = SessionRegistry();
   final Map<String, _ServerTunnel> _tunnels = <String, _ServerTunnel>{};
   HttpServer? _httpServer;
@@ -153,6 +168,56 @@ class RelayServer {
               .toList(),
         );
       }
+      if (request.uri.path == '/admin/keys' && request.method == 'GET') {
+        if (!await _requireAdmin(request)) return;
+        return _renderKeysAdmin(request);
+      }
+      if (request.uri.path == '/admin/keys/add' && request.method == 'POST') {
+        if (!await _requireAdmin(request)) return;
+        try {
+          final form = await _readForm(request);
+          await _keysManager.add(form['key'] ?? '');
+          return _redirect(request, '/admin/keys?message=Key%20added.');
+        } on Object catch (error) {
+          return _renderKeysAdmin(request, error: '$error');
+        }
+      }
+      final keyActionMatch =
+          RegExp(r'^/admin/keys/(\d+)/(edit|delete|disable|enable)$')
+              .firstMatch(request.uri.path);
+      if (keyActionMatch != null && request.method == 'POST') {
+        if (!await _requireAdmin(request)) return;
+        final index = int.parse(keyActionMatch.group(1)!);
+        final action = keyActionMatch.group(2)!;
+        try {
+          final form = action == 'edit' ? await _readForm(request) : null;
+          switch (action) {
+            case 'edit':
+              await _keysManager.edit(index, form?['key'] ?? '');
+            case 'delete':
+              await _keysManager.delete(index);
+            case 'disable':
+              await _keysManager.disable(index);
+            case 'enable':
+              await _keysManager.enable(index);
+          }
+        } on Object catch (error) {
+          return _renderKeysAdmin(request, error: '$error');
+        }
+        return _redirect(request, '/admin/keys?message=Key%20updated.');
+      }
+      if (request.uri.path == '/admin/ssh/reload' && request.method == 'POST') {
+        if (!await _requireAdmin(request)) return;
+        try {
+          await _signalSshdReload();
+          return _redirect(
+            request,
+            '/admin/keys?message=sshd%20reload%20requested.',
+          );
+        } on Object catch (error) {
+          return _renderKeysAdmin(request, error: '$error');
+        }
+      }
       final match = RegExp(r'^/api/sessions/([^/]+)/disconnect$')
           .firstMatch(request.uri.path);
       if (match != null && request.method == 'POST') {
@@ -173,6 +238,34 @@ class RelayServer {
         await request.response.close();
       }
     }
+  }
+
+  Future<void> _renderKeysAdmin(
+    HttpRequest request, {
+    String? error,
+  }) async {
+    final message = request.uri.queryParameters['message'];
+    request.response.headers.contentType = ContentType.html;
+    request.response.write(
+      renderAdminKeysPage(
+        keys: await _keysManager.list(),
+        authorizedKeysPath: config.authorizedKeysFile,
+        reloadAvailable: config.sshdReloadSignalFile != null,
+        message: message,
+        error: error,
+      ),
+    );
+    await request.response.close();
+  }
+
+  Future<void> _signalSshdReload() async {
+    final path = config.sshdReloadSignalFile;
+    if (path == null) {
+      throw StateError('SSHD_RELOAD_SIGNAL_FILE is not configured.');
+    }
+    final file = File(path);
+    await file.parent.create(recursive: true);
+    await file.writeAsString(DateTime.now().toUtc().toIso8601String());
   }
 
   Future<void> _acceptAgent(HttpRequest request) async {
@@ -458,6 +551,18 @@ Future<void> _json(HttpRequest request, int status, Object? body) async {
     ..statusCode = status
     ..headers.contentType = ContentType.json
     ..write(jsonEncode(body));
+  await request.response.close();
+}
+
+Future<Map<String, String>> _readForm(HttpRequest request) async {
+  final body = await utf8.decodeStream(request);
+  return Uri.splitQueryString(body);
+}
+
+Future<void> _redirect(HttpRequest request, String location) async {
+  request.response
+    ..statusCode = HttpStatus.seeOther
+    ..headers.set(HttpHeaders.locationHeader, location);
   await request.response.close();
 }
 

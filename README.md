@@ -13,7 +13,8 @@ restricted SSH local-forward.
 - Docker publishes relay tunnel ports only on host loopback.
 - Agents authenticate with a revocable enrollment token.
 - The status page and `GET /api/sessions` are read-only and public by default.
-- Disconnect/admin actions require Basic authentication when enabled.
+- SSH key admin and disconnect/admin actions require Basic authentication when
+  `ADMIN_PASSWORD` is configured.
 - Heartbeat and maximum-session timeouts remove stale sessions.
 - SSH examples allow only local forwarding to the relay range and no shell.
 
@@ -24,7 +25,7 @@ secret, rotate it when exposed, and do not use it as an admin credential.
 
 1. Copy the environment example and edit the production section at the top of
    `.env`. At minimum, replace `AGENT_ENROLLMENT_TOKEN`. Set `ADMIN_PASSWORD`
-   only if you want admin actions such as disconnect:
+   to enable the `/admin/keys` page for managing operator SSH keys:
 
    ```bash
    cp .env.example .env
@@ -49,11 +50,10 @@ secret, rotate it when exposed, and do not use it as an admin credential.
 3. Install the nginx example from
    `deploy/nginx-debug-relay.conf.example`. It exposes the read-only session
    list and client exe download to configured internal networks, and protects
-   only the optional admin mutation endpoint. If `ADMIN_PASSWORD` is
-   configured, create the Basic-auth file using the same username/password:
+   admin pages and mutation endpoints to the Dart server, which performs its
+   own Basic-auth checks from `ADMIN_USERNAME` and `ADMIN_PASSWORD`:
 
    ```bash
-   sudo htpasswd -c /etc/nginx/.htpasswd-debug-relay admin
    sudo nginx -t
    sudo systemctl reload nginx
    ```
@@ -93,6 +93,15 @@ cp deploy/authorized_keys.example deploy/authorized_keys
 # Edit deploy/authorized_keys and add one .pub key per line.
 docker compose up -d --build ssh-relay
 ```
+
+After `ADMIN_PASSWORD` is configured, open
+`https://softapp.vietsov.com.vn:9999/admin/keys` to add, edit, disable, or
+delete keys through the server admin page. The main `/debug-sessions` page links
+to this admin page, but the password prompt is enforced only by the Dart server.
+The reload button signals the Docker ssh-relay sidecar through a shared marker
+file. New `authorized_keys` entries are normally read by OpenSSH without a
+reload, but the button is available when you want to force sshd to re-read its
+configuration.
 
 Install `deploy/operator_ssh_config.example` in each operator's SSH config.
 This file is only a client-side convenience alias; it is not required on the
@@ -187,4 +196,3 @@ dart test
 powershell -ExecutionPolicy Bypass -File tool/build_clients.ps1
 docker compose config
 ```
-
