@@ -160,6 +160,10 @@ configuration when possible. Code-sign the executable.
 
 The client finds Chrome in standard install paths or through `CHROME_PATH`,
 uses the first free port in `9222-9299`, and creates a temporary profile.
+It also accepts additional Chrome debug endpoints from the console. If a user
+already has a Chrome window with remote debugging enabled, they can paste a
+loopback address such as `127.0.0.1:9223` into the agent console. The server
+will allocate another relay port and show a second row on `/debug-sessions`.
 
 ## Operator workflow
 

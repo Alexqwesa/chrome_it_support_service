@@ -352,6 +352,12 @@ class RelayServer {
     final tunnel = _ServerTunnel(webSocket, serverSocket);
     _registry.add(session);
     _tunnels[id] = tunnel;
+    tunnel.onAddTarget = (targetId, label, localChromePort) => _addTarget(
+          sessionId: id,
+          targetId: targetId,
+          label: label,
+          localChromePort: localChromePort,
+        );
     tunnel.onHeartbeat = () => session.lastHeartbeat = DateTime.now().toUtc();
     tunnel.onDone =
         () => unawaited(disconnect(id, reason: 'agent disconnected'));
@@ -364,6 +370,58 @@ class RelayServer {
     tunnel.start();
     _logConnected(session);
     return tunnel;
+  }
+
+  Future<void> _addTarget({
+    required String sessionId,
+    required String targetId,
+    required String label,
+    required int localChromePort,
+  }) async {
+    final session = _registry[sessionId];
+    final tunnel = _tunnels[sessionId];
+    if (session == null || tunnel == null) return;
+    if (session.targets.any((target) => target.id == targetId)) return;
+    final allocation = await _allocateTunnelSocket();
+    if (allocation == null) {
+      tunnel.sendControl(
+        TunnelFrame(
+          type: TunnelFrameType.error,
+          message: 'No relay ports available for additional Chrome endpoint.',
+          metadata: <String, Object?>{'targetId': targetId},
+        ),
+      );
+      return;
+    }
+    final (port, socket) = allocation;
+    session.targets.add(
+      RelayTarget(
+        id: targetId,
+        label: label,
+        localChromePort: localChromePort,
+        serverPort: port,
+        addedAt: DateTime.now().toUtc(),
+      ),
+    );
+    tunnel.addListener(targetId, socket);
+    tunnel.sendControl(
+      TunnelFrame(
+        type: TunnelFrameType.targetRegistered,
+        metadata: <String, Object?>{
+          'targetId': targetId,
+          'label': label,
+          'serverPort': port,
+          'localChromePort': localChromePort,
+        },
+      ),
+    );
+    stdout.writeln(
+      '\n[ADDED TARGET]\n'
+      'PC: ${session.registration.pcName}\n'
+      'Label: $label\n'
+      'Server local port: 127.0.0.1:$port\n'
+      'Client Chrome: 127.0.0.1:$localChromePort',
+    );
   }
 
   Future<(int, ServerSocket)?> _allocateTunnelSocket() async {
@@ -383,7 +441,9 @@ class RelayServer {
     final session = _registry.remove(id);
     final tunnel = _tunnels.remove(id);
     if (session == null) return;
-    _allocator.release(session.serverPort);
+    for (final target in session.targets) {
+      _allocator.release(target.serverPort);
+    }
     await tunnel?.close(reason);
     final duration = DateTime.now().toUtc().difference(session.connectedAt);
     stdout.writeln(
@@ -462,25 +522,44 @@ class RelayServer {
 }
 
 class _ServerTunnel {
-  _ServerTunnel(this.webSocket, this.serverSocket);
+  _ServerTunnel(this.webSocket, ServerSocket serverSocket) {
+    addListener('default', serverSocket);
+  }
 
   final WebSocket webSocket;
-  final ServerSocket serverSocket;
+  final id = '${DateTime.now().microsecondsSinceEpoch}';
+  final Map<String, ServerSocket> _listeners = <String, ServerSocket>{};
   final Map<int, Socket> _streams = <int, Socket>{};
+  final Map<int, String> _streamTargets = <int, String>{};
   var _nextStreamId = 1;
   var _closed = false;
   void Function()? onHeartbeat;
   void Function()? onDone;
+  Future<void> Function(String targetId, String label, int localChromePort)?
+      onAddTarget;
 
-  void start() {
-    serverSocket.listen(_acceptSocket, onError: (_) => onDone?.call());
+  void start() {}
+
+  void addListener(String targetId, ServerSocket serverSocket) {
+    _listeners[targetId] = serverSocket;
+    serverSocket.listen(
+      (socket) => _acceptSocket(targetId, socket),
+      onError: (_) => onDone?.call(),
+    );
   }
 
-  void _acceptSocket(Socket socket) {
+  void _acceptSocket(String targetId, Socket socket) {
     if (_closed) return socket.destroy();
     final streamId = _nextStreamId++;
     _streams[streamId] = socket;
-    _send(TunnelFrame(type: TunnelFrameType.open, streamId: streamId));
+    _streamTargets[streamId] = targetId;
+    _send(
+      TunnelFrame(
+        type: TunnelFrameType.open,
+        streamId: streamId,
+        metadata: <String, Object?>{'targetId': targetId},
+      ),
+    );
     socket.listen(
       (data) => _send(
         TunnelFrame(
@@ -518,9 +597,20 @@ class _ServerTunnel {
           }
         case TunnelFrameType.heartbeat:
           onHeartbeat?.call();
+        case TunnelFrameType.addTarget:
+          final targetId = frame.metadata['targetId'];
+          final label = frame.metadata['label'];
+          final localChromePort = frame.metadata['localChromePort'];
+          if (targetId is String && label is String && localChromePort is int) {
+            final handler = onAddTarget;
+            if (handler != null) {
+              unawaited(handler(targetId, label, localChromePort));
+            }
+          }
         case TunnelFrameType.register:
         case TunnelFrameType.registered:
         case TunnelFrameType.open:
+        case TunnelFrameType.targetRegistered:
           break;
       }
     } on FormatException catch (error) {
@@ -530,6 +620,7 @@ class _ServerTunnel {
 
   void _closeStream(int streamId, {required bool notifyPeer}) {
     final socket = _streams.remove(streamId);
+    _streamTargets.remove(streamId);
     socket?.destroy();
     if (notifyPeer) {
       _send(TunnelFrame(type: TunnelFrameType.close, streamId: streamId));
@@ -542,6 +633,10 @@ class _ServerTunnel {
     }
   }
 
+  void sendControl(TunnelFrame frame) {
+    _send(frame);
+  }
+
   Future<void> close(String reason) async {
     if (_closed) return;
     _closed = true;
@@ -549,7 +644,11 @@ class _ServerTunnel {
       socket.destroy();
     }
     _streams.clear();
-    await serverSocket.close();
+    _streamTargets.clear();
+    for (final listener in _listeners.values.toList()) {
+      await listener.close();
+    }
+    _listeners.clear();
     await webSocket.close(WebSocketStatus.normalClosure, reason);
   }
 }

@@ -22,7 +22,7 @@ void main() {
         'SERVER_HTTP_BIND': '127.0.0.1',
         'SERVER_TUNNEL_BIND': '127.0.0.1',
         'SERVER_PORT_START': '$tunnelPort',
-        'SERVER_PORT_END': '$tunnelPort',
+        'SERVER_PORT_END': '${tunnelPort + 20}',
         'SSH_RELAY_HOST': 'debug-tunnel@softapp.vietsov.com.vn',
         'SSH_RELAY_PORT': '2223',
         'AGENT_ENROLLMENT_TOKEN': 'agent-test-token',
@@ -32,6 +32,7 @@ void main() {
     addTearDown(server.stop);
 
     final assigned = Completer<int>();
+    final secondAssigned = Completer<int>();
     final agent = await WebSocket.connect(
       'ws://127.0.0.1:${server.boundHttpPort}/agent',
       headers: <String, dynamic>{
@@ -43,6 +44,8 @@ void main() {
       final frame = TunnelFrame.decode(raw);
       if (frame.type == TunnelFrameType.registered) {
         assigned.complete(frame.metadata['serverPort']! as int);
+      } else if (frame.type == TunnelFrameType.targetRegistered) {
+        secondAssigned.complete(frame.metadata['serverPort']! as int);
       } else if (frame.type == TunnelFrameType.data) {
         agent.add(frame.encode());
       }
@@ -83,6 +86,41 @@ void main() {
     expect(
       await response.future.timeout(const Duration(seconds: 5)),
       <int>[4, 5, 6],
+    );
+
+    agent.add(
+      const TunnelFrame(
+        type: TunnelFrameType.addTarget,
+        metadata: <String, Object?>{
+          'targetId': 'manual-1',
+          'label': 'Existing Chrome 127.0.0.1:9333',
+          'localChromePort': 9333,
+        },
+      ).encode(),
+    );
+    final secondPort =
+        await secondAssigned.future.timeout(const Duration(seconds: 5));
+    expect(secondPort, isNot(port));
+
+    final updatedSessions = await _getJsonList(
+      Uri.parse('http://127.0.0.1:${server.boundHttpPort}/api/sessions'),
+    );
+    final targets = updatedSessions.single['targets'] as List<dynamic>;
+    expect(targets, hasLength(2));
+    expect(targets.last['server_local_port'], secondPort);
+
+    final secondOperator =
+        await Socket.connect(InternetAddress.loopbackIPv4, secondPort);
+    addTearDown(secondOperator.destroy);
+    final secondResponse = Completer<List<int>>();
+    secondOperator.listen((data) {
+      if (!secondResponse.isCompleted) secondResponse.complete(data);
+    });
+    secondOperator.add(Uint8List.fromList(<int>[7, 8, 9]));
+
+    expect(
+      await secondResponse.future.timeout(const Duration(seconds: 5)),
+      <int>[7, 8, 9],
     );
   });
 }

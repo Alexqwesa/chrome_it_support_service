@@ -8,7 +8,9 @@ enum TunnelFrameType {
   data,
   close,
   error,
-  heartbeat
+  heartbeat,
+  addTarget,
+  targetRegistered
 }
 
 class TunnelFrame {

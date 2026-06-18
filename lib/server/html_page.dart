@@ -9,21 +9,26 @@ String renderSessionsPage(
   required String clientDownloadUrl,
   required bool canDisconnect,
 }) {
-  final rows = sessions.map((session) {
+  final rows = sessions.expand((session) {
     final json = session.toJson(
       sshHost: sshHost,
       sshPort: sshPort,
     );
-    final command = json['sshCommand']! as String;
-    final disconnectButton = canDisconnect
-        ? '<button class="danger" onclick=\'disconnectSession(${jsonEncode(session.id)})\'>Disconnect</button>'
-        : '';
-    return '''
+    final targets =
+        (json['targets']! as List<Object?>).cast<Map<String, Object?>>();
+    return targets.map((target) {
+      final command = target['sshCommand']! as String;
+      final disconnectButton = canDisconnect && target['id'] == 'default'
+          ? '<button class="danger" onclick=\'disconnectSession(${jsonEncode(session.id)})\'>Disconnect session</button>'
+          : '';
+      return '''
       <tr>
         <td><span class="online">Online</span></td>
         <td>${_escape(session.registration.pcName)}</td>
         <td>${_escape(session.registration.windowsUser)}</td>
-        <td><code>127.0.0.1:${session.serverPort}</code></td>
+        <td>${_escape(target['label']! as String)}</td>
+        <td><code>127.0.0.1:${target['serverPort']}</code></td>
+        <td><code>127.0.0.1:${target['localChromePort']}</code></td>
         <td>${_escape(session.connectedAt.toLocal().toString())}</td>
         <td><span data-duration="${session.connectedAt.toIso8601String()}"></span></td>
         <td>${_escape(session.lastHeartbeat.toLocal().toString())}</td>
@@ -32,6 +37,7 @@ String renderSessionsPage(
           $disconnectButton
         </td>
       </tr>''';
+    });
   }).join();
 
   return '''<!doctype html>
@@ -64,8 +70,8 @@ String renderSessionsPage(
     <a href="/admin/keys">SSH key admin</a>
   </p>
   <table>
-    <thead><tr><th>Status</th><th>PC name</th><th>User</th><th>Server local port</th><th>Connected at</th><th>Duration</th><th>Last heartbeat</th><th>Actions</th></tr></thead>
-    <tbody>${rows.isEmpty ? '<tr><td colspan="8">No active sessions.</td></tr>' : rows}</tbody>
+    <thead><tr><th>Status</th><th>PC name</th><th>User</th><th>Target</th><th>Server local port</th><th>Client Chrome</th><th>Connected at</th><th>Duration</th><th>Last heartbeat</th><th>Actions</th></tr></thead>
+    <tbody>${rows.isEmpty ? '<tr><td colspan="10">No active sessions.</td></tr>' : rows}</tbody>
   </table>
   <script>
     function copyCommand(command) {
