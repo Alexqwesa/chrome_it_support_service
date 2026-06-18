@@ -1,5 +1,6 @@
-Host vsp-debug
-    HostName debug.example.com
+Host softapp-relay
+    HostName softapp.vietsov.com.vn
+    Port 2222
     User debug-tunnel
     IdentityFile ~/.ssh/vsp_debug_tunnel_ed25519
     IdentitiesOnly yes

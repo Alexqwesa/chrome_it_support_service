@@ -5,10 +5,11 @@ import 'session_registry.dart';
 String renderSessionsPage(
   Iterable<RelaySession> sessions, {
   required String sshHost,
+  required int sshPort,
   required bool canDisconnect,
 }) {
   final rows = sessions.map((session) {
-    final json = session.toJson(sshHost: sshHost);
+    final json = session.toJson(sshHost: sshHost, sshPort: sshPort);
     final command = json['sshCommand']! as String;
     final disconnectButton = canDisconnect
         ? '<button class="danger" onclick=\'disconnectSession(${jsonEncode(session.id)})\'>Disconnect</button>'

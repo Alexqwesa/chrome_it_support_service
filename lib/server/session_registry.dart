@@ -20,7 +20,11 @@ class RelaySession {
   final DateTime connectedAt;
   DateTime lastHeartbeat;
 
-  Map<String, Object?> toJson({required String sshHost}) {
+  Map<String, Object?> toJson({
+    required String sshHost,
+    required int sshPort,
+  }) {
+    final portArg = sshPort == 22 ? '' : ' -p $sshPort';
     return <String, Object?>{
       'id': id,
       ...registration.toJson(),
@@ -30,7 +34,9 @@ class RelaySession {
       'connectedAt': connectedAt.toIso8601String(),
       'time_of_begin_of_connection': connectedAt.toIso8601String(),
       'lastHeartbeat': lastHeartbeat.toIso8601String(),
-      'sshCommand': 'ssh -N -L 9333:127.0.0.1:$serverPort $sshHost',
+      'sshHost': sshHost,
+      'sshPort': sshPort,
+      'sshCommand': 'ssh$portArg -N -L 9333:127.0.0.1:$serverPort $sshHost',
     };
   }
 }

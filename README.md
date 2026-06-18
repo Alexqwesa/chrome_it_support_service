@@ -69,6 +69,9 @@ port is published on `${SERVER_HTTP_PUBLISH_BIND:-0.0.0.0}:18080`; set
 
 ## Restricted SSH setup
 
+If the SSH relay host is Linux, use the commands below. If it is Windows, use
+[deploy/windows-openssh-debug-tunnel-setup.md](C:\Users\user\StudioProjects\chrome_it_support_service\deploy\windows-openssh-debug-tunnel-setup.md).
+
 Create the forwarding-only account:
 
 ```bash
@@ -93,8 +96,8 @@ Install `deploy/operator_ssh_config.example` in each operator's SSH config.
 Verify that a shell and arbitrary forwarding fail:
 
 ```bash
-ssh vsp-debug
-ssh -N -L 9333:127.0.0.1:22 vsp-debug
+ssh -p 2222 debug-tunnel@softapp.vietsov.com.vn
+ssh -p 2222 -N -L 9333:127.0.0.1:22 debug-tunnel@softapp.vietsov.com.vn
 ```
 
 ## Build and run the Windows client
@@ -126,12 +129,12 @@ uses the first free port in `9222-9299`, and creates a temporary profile.
 ## Operator workflow
 
 1. Ask the user to run the client and keep its console open.
-2. Open `https://debug.example.com/debug-sessions`.
+2. Open `https://softapp.vietsov.com.vn/debug-sessions`.
 3. Find the PC and copy its SSH command.
 4. Run the command, for example:
 
    ```bash
-   ssh -N -L 9333:127.0.0.1:41001 vsp-debug
+   ssh -p 2222 -N -L 9333:127.0.0.1:41001 debug-tunnel@softapp.vietsov.com.vn
    ```
 
 5. Open `chrome://inspect`, choose **Configure**, and add `localhost:9333`.
@@ -172,7 +175,8 @@ the configured admin password only if `SESSION_LIST_REQUIRES_AUTH=true`.
 | `SERVER_TUNNEL_BIND` | server | `127.0.0.1` | Relay listener address; Docker uses `0.0.0.0` |
 | `SERVER_HTTP_PUBLISH_BIND` | compose | `0.0.0.0` | Host bind address for the read-only HTTP list |
 | `SERVER_PORT_START/END` | server | `41000/41049` | Fixed relay range |
-| `OPERATOR_SSH_HOST` | server | `vsp-debug` | Alias shown in copied SSH commands |
+| `SSH_RELAY_HOST` | server | `debug-tunnel@softapp.vietsov.com.vn` | SSH target shown in copied SSH commands |
+| `SSH_RELAY_PORT` | server | `2222` | SSH port shown in copied SSH commands |
 | `HEARTBEAT_TIMEOUT_SECONDS` | server | `60` | Stale-agent timeout |
 | `SESSION_TIMEOUT_SECONDS` | server | `28800` | Maximum session lifetime |
 | `RELAY_SERVER_URL` | client | required | Public relay URL, normally HTTPS |

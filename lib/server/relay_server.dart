@@ -21,7 +21,9 @@ class RelayServerConfig {
         adminPassword = _optionalSecret(env, 'ADMIN_PASSWORD'),
         sessionListRequiresAuth =
             _bool(env, 'SESSION_LIST_REQUIRES_AUTH', false),
-        operatorSshHost = env['OPERATOR_SSH_HOST'] ?? 'vsp-debug',
+        sshRelayHost =
+            env['SSH_RELAY_HOST'] ?? 'debug-tunnel@softapp.vietsov.com.vn',
+        sshRelayPort = _int(env, 'SSH_RELAY_PORT', 2222),
         heartbeatTimeout = Duration(
           seconds: _int(env, 'HEARTBEAT_TIMEOUT_SECONDS', 60),
         ),
@@ -38,7 +40,8 @@ class RelayServerConfig {
   final String adminUsername;
   final String? adminPassword;
   final bool sessionListRequiresAuth;
-  final String operatorSshHost;
+  final String sshRelayHost;
+  final int sshRelayPort;
   final Duration heartbeatTimeout;
   final Duration sessionTimeout;
 
@@ -122,7 +125,8 @@ class RelayServer {
         request.response.write(
           renderSessionsPage(
             _registry.sessions,
-            sshHost: config.operatorSshHost,
+            sshHost: config.sshRelayHost,
+            sshPort: config.sshRelayPort,
             canDisconnect: config.adminPassword != null,
           ),
         );
@@ -136,7 +140,12 @@ class RelayServer {
           request,
           HttpStatus.ok,
           _registry.sessions
-              .map((session) => session.toJson(sshHost: config.operatorSshHost))
+              .map(
+                (session) => session.toJson(
+                  sshHost: config.sshRelayHost,
+                  sshPort: config.sshRelayPort,
+                ),
+              )
               .toList(),
         );
       }

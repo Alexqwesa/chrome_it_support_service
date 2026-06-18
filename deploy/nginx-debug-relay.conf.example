@@ -1,9 +1,9 @@
 server {
     listen 443 ssl http2;
-    server_name debug.example.com;
+    server_name softapp.vietsov.com.vn;
 
-    ssl_certificate /etc/letsencrypt/live/debug.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/debug.example.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/softapp.vietsov.com.vn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/softapp.vietsov.com.vn/privkey.pem;
 
     # Agent authentication is handled by AGENT_ENROLLMENT_TOKEN.
     location = /agent {
