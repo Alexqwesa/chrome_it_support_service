@@ -1,0 +1,168 @@
+# Chrome IT Support Service
+
+Internal Chrome remote-debugging relay implemented in Dart. A Windows agent
+launches an isolated Chrome profile, connects outbound over WebSocket/WSS, and
+receives a server-local relay port. IT operators reach that port only through a
+restricted SSH local-forward.
+
+## Security model
+
+- Client Chrome debug endpoints bind only to `127.0.0.1`.
+- Relay ports use the fixed `41000-41049` range.
+- Docker publishes HTTP and relay ports only on host loopback.
+- Agents authenticate with a revocable enrollment token.
+- The status page and JSON/admin actions require Basic authentication.
+- Heartbeat and maximum-session timeouts remove stale sessions.
+- SSH examples allow only local forwarding to the relay range and no shell.
+
+The enrollment token permits a machine to create a debug session. Treat it as a
+secret, rotate it when exposed, and do not use it as an admin credential.
+
+## Server deployment
+
+1. Copy the environment example and replace every secret:
+
+   ```bash
+   cp .env.example .env
+   chmod 600 .env
+   openssl rand -base64 32
+   docker compose up -d --build
+   docker compose logs -f debug-relay
+   ```
+
+2. Confirm loopback-only publishing:
+
+   ```bash
+   docker compose ps
+   curl http://127.0.0.1:8080/health
+   ```
+
+3. Install the nginx example from
+   `deploy/nginx-debug-relay.conf.example`. Create the Basic-auth file using the
+   same username/password configured by `ADMIN_USERNAME` and `ADMIN_PASSWORD`:
+
+   ```bash
+   sudo htpasswd -c /etc/nginx/.htpasswd-debug-relay admin
+   sudo nginx -t
+   sudo systemctl reload nginx
+   ```
+
+4. Adjust the nginx `allow` networks before deployment. `/agent` must remain
+   reachable by supported user PCs, while `/debug-sessions` and `/api/` should
+   be limited to the IT VPN or internal network.
+
+The service binds tunnel ports to `0.0.0.0` **inside the container** so Docker
+can publish them. `docker-compose.yml` publishes them only to host
+`127.0.0.1`, so they are not directly reachable from the LAN.
+
+## Restricted SSH setup
+
+Create the forwarding-only account:
+
+```bash
+sudo adduser --system --group --home /home/debug-tunnel debug-tunnel
+sudo mkdir -p /home/debug-tunnel/.ssh
+sudo touch /home/debug-tunnel/.ssh/authorized_keys
+sudo chown -R debug-tunnel:debug-tunnel /home/debug-tunnel
+sudo chmod 700 /home/debug-tunnel/.ssh
+sudo chmod 600 /home/debug-tunnel/.ssh/authorized_keys
+```
+
+Add one public key per operator to `authorized_keys`. Do not share private keys.
+Append `deploy/sshd_config.debug-tunnel.example` to `/etc/ssh/sshd_config`,
+then validate and reload:
+
+```bash
+sudo sshd -t
+sudo systemctl reload sshd  # use "ssh" on Debian/Ubuntu if required
+```
+
+Install `deploy/operator_ssh_config.example` in each operator's SSH config.
+Verify that a shell and arbitrary forwarding fail:
+
+```bash
+ssh vsp-debug
+ssh -N -L 9333:127.0.0.1:22 vsp-debug
+```
+
+## Build and run the Windows client
+
+Build on Windows:
+
+```powershell
+dart pub get
+dart compile exe bin/client.dart -o build/client_debug_agent.exe
+Copy-Item deploy/run-client.example.ps1 build/run-client.ps1
+```
+
+Edit `build/run-client.ps1` with the public HTTPS relay URL and enrollment
+token, then distribute it with `client_debug_agent.exe`. For production,
+prefer injecting the token through managed device configuration instead of
+shipping a permanent token beside the executable. Code-sign the executable.
+
+The client finds Chrome in standard install paths or through `CHROME_PATH`,
+uses the first free port in `9222-9299`, and creates a temporary profile.
+
+## Operator workflow
+
+1. Ask the user to run the client and keep its console open.
+2. Open `https://debug.example.com/debug-sessions`.
+3. Find the PC and copy its SSH command.
+4. Run the command, for example:
+
+   ```bash
+   ssh -N -L 9333:127.0.0.1:41001 vsp-debug
+   ```
+
+5. Open `chrome://inspect`, choose **Configure**, and add `localhost:9333`.
+6. Close the SSH command and disconnect the session after support is finished.
+
+To verify forwarding without DevTools, open
+`http://127.0.0.1:9333/json/version`.
+
+## Local development
+
+```powershell
+$env:ADMIN_PASSWORD = "local-admin-password"
+$env:AGENT_ENROLLMENT_TOKEN = "local-agent-token"
+dart run bin/server.dart
+```
+
+In a second Windows shell:
+
+```powershell
+$env:RELAY_SERVER_URL = "http://127.0.0.1:8080"
+$env:AGENT_ENROLLMENT_TOKEN = "local-agent-token"
+dart run bin/client.dart
+```
+
+Open `http://127.0.0.1:8080/debug-sessions` and authenticate as `admin` with
+the configured admin password.
+
+## Configuration
+
+| Variable | Component | Default | Purpose |
+| --- | --- | --- | --- |
+| `ADMIN_USERNAME` | server | `admin` | Status/API Basic-auth username |
+| `ADMIN_PASSWORD` | server | required | Status/API Basic-auth password |
+| `AGENT_ENROLLMENT_TOKEN` | both | required | Agent WebSocket bearer token |
+| `SERVER_HTTP_PORT` | server | `8080` | HTTP/WebSocket listener port |
+| `SERVER_HTTP_BIND` | server | `0.0.0.0` | HTTP listener address |
+| `SERVER_TUNNEL_BIND` | server | `127.0.0.1` | Relay listener address; Docker uses `0.0.0.0` |
+| `SERVER_PORT_START/END` | server | `41000/41049` | Fixed relay range |
+| `OPERATOR_SSH_HOST` | server | `vsp-debug` | Alias shown in copied SSH commands |
+| `HEARTBEAT_TIMEOUT_SECONDS` | server | `60` | Stale-agent timeout |
+| `SESSION_TIMEOUT_SECONDS` | server | `28800` | Maximum session lifetime |
+| `RELAY_SERVER_URL` | client | required | Public relay URL, normally HTTPS |
+| `CHROME_PATH` | client | auto-detected | Optional full path to Chrome |
+| `AGENT_VERSION` | client | `1.0.0` | Version shown in logs |
+
+## Verification
+
+```powershell
+dart format --output=none --set-exit-if-changed .
+dart analyze
+dart test
+dart compile exe bin/client.dart -o build/client_debug_agent.exe
+docker compose config
+```

@@ -1,0 +1,18 @@
+services:
+  debug-relay:
+    build: .
+    container_name: debug-relay
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:18080:8080"
+      - "127.0.0.1:18081:8081" # for admin
+      - "127.0.0.1:41000-41049:41000-41049"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp

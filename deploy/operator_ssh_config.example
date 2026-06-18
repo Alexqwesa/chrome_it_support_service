@@ -1,0 +1,8 @@
+Host vsp-debug
+    HostName debug.example.com
+    User debug-tunnel
+    IdentityFile ~/.ssh/vsp_debug_tunnel_ed25519
+    IdentitiesOnly yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+    ExitOnForwardFailure yes
