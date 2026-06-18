@@ -28,6 +28,7 @@ server {
     location = /download/client_debug_agent.exe {
 
         allow 10.0.0.0/8;
+        allow 172.16.0.0/12;
         allow 192.168.0.0/16;
         deny all;
 
@@ -41,6 +42,7 @@ server {
     # Read-only connection list for the local network.
     location = /debug-sessions {
         allow 10.0.0.0/8;
+        allow 172.16.0.0/12;
         allow 192.168.0.0/16;
         deny all;
 
@@ -50,6 +52,7 @@ server {
 
     location = /api/sessions {
         allow 10.0.0.0/8;
+        allow 172.16.0.0/12;
         allow 192.168.0.0/16;
         deny all;
 
@@ -61,6 +64,7 @@ server {
     # Dart server through ADMIN_PASSWORD, not by nginx.
     location /admin/ {
         allow 10.0.0.0/8;
+        allow 172.16.0.0/12;
         allow 192.168.0.0/16;
         deny all;
 
@@ -71,12 +75,17 @@ server {
 
     location ~ ^/api/sessions/[^/]+/disconnect$ {
         allow 10.0.0.0/8;
+        allow 172.16.0.0/12;
         allow 192.168.0.0/16;
         deny all;
 
         proxy_pass http://127.0.0.1:9998;
         proxy_set_header Authorization $http_authorization;
         proxy_set_header Host $host;
+    }
+
+    location = / {
+        return 302 /debug-sessions;
     }
 
     location / {
