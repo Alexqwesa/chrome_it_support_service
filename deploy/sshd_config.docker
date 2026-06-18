@@ -13,6 +13,7 @@ AuthenticationMethods publickey
 
 AllowUsers debug-tunnel
 AuthorizedKeysFile .ssh/authorized_keys
+StrictModes no
 
 AllowTcpForwarding local
 PermitOpen 127.0.0.1:41000 127.0.0.1:41001 127.0.0.1:41002 127.0.0.1:41003 127.0.0.1:41004

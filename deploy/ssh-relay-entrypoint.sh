@@ -11,10 +11,13 @@ if [ ! -s /etc/ssh/host_keys/ssh_host_rsa_key ]; then
   ssh-keygen -t rsa -b 4096 -f /etc/ssh/host_keys/ssh_host_rsa_key -N ''
 fi
 
-touch /home/debug-tunnel/.ssh/authorized_keys
-chown -R debug-tunnel:debug-tunnel /home/debug-tunnel/.ssh
-chmod 700 /home/debug-tunnel/.ssh
-chmod 600 /home/debug-tunnel/.ssh/authorized_keys
+if [ ! -e /home/debug-tunnel/.ssh/authorized_keys ]; then
+  touch /home/debug-tunnel/.ssh/authorized_keys
+fi
+
+chown debug-tunnel:debug-tunnel /home/debug-tunnel/.ssh || true
+chmod 700 /home/debug-tunnel/.ssh || true
+chmod 600 /home/debug-tunnel/.ssh/authorized_keys || true
 chmod 600 /etc/ssh/host_keys/ssh_host_*_key
 chmod 644 /etc/ssh/host_keys/ssh_host_*_key.pub
 
