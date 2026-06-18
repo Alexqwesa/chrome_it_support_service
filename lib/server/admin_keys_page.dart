@@ -64,7 +64,10 @@ String renderAdminKeysPage({
     .message { color: #137333; background: #e6f4ea; padding: .8rem; border-radius: 6px; }
     .error { color: #b3261e; background: #fce8e6; padding: .8rem; border-radius: 6px; }
     .note { color: #5f6368; }
+    .help { background: #f8fafd; border: 1px solid #d0d7de; border-radius: 6px; padding: 1rem; }
+    .help li { margin: .35rem 0; }
     code { white-space: nowrap; }
+    pre { background: #f6f8fa; padding: .7rem; overflow-x: auto; }
   </style>
 </head>
 <body>
@@ -75,6 +78,18 @@ String renderAdminKeysPage({
   ${error == null ? '' : '<p class="error">${_escape(error)}</p>'}
 
   <h2>Add key</h2>
+  <div class="help">
+    <p><strong>Operator key rule:</strong> each operator must use their own SSH keypair. Never share a private key.</p>
+    <ol>
+      <li>If the operator does not already have a key, create one on their PC:</li>
+    </ol>
+    <pre>ssh-keygen -t ed25519 -f "\$env:USERPROFILE\\.ssh\\vsp_debug_tunnel_ed25519" -C "vsp-debug-tunnel-\$env:USERNAME"</pre>
+    <ol start="2">
+      <li>Paste only the public key file content here:</li>
+    </ol>
+    <pre>Get-Content "\$env:USERPROFILE\\.ssh\\vsp_debug_tunnel_ed25519.pub"</pre>
+    <p class="note">The private key file without <code>.pub</code> stays on the operator PC and must not be uploaded or shared.</p>
+  </div>
   <form method="post" action="/admin/keys/add">
     <textarea name="key" rows="4" spellcheck="false" placeholder="ssh-ed25519 AAAA... operator-name"></textarea>
     <p><button type="submit">Add key</button></p>

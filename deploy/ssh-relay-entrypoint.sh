@@ -14,8 +14,22 @@ fi
 chmod 600 /etc/ssh/host_keys/ssh_host_*_key
 chmod 644 /etc/ssh/host_keys/ssh_host_*_key.pub
 
+echo "Starting ssh-relay."
+echo "Authorized keys file: /data/authorized_keys"
+if [ -f /data/authorized_keys ]; then
+  key_count="$(grep -E '^[[:space:]]*(restrict |no-|command=|ssh-|ecdsa-|sk-)' /data/authorized_keys 2>/dev/null | wc -l | tr -d ' ')"
+  echo "Authorized keys present: $key_count"
+else
+  echo "WARNING: /data/authorized_keys is missing or is not a file."
+fi
+echo "Host key permissions:"
+ls -l /etc/ssh/host_keys/ssh_host_*_key
+echo "Validating sshd configuration."
+/usr/sbin/sshd -t -f /etc/ssh/sshd_config
+
 /usr/sbin/sshd -D -e &
 sshd_pid="$!"
+echo "sshd started with pid $sshd_pid"
 
 stop_sshd() {
   kill "$sshd_pid" 2>/dev/null || true

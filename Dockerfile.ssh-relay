@@ -4,6 +4,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends openssh-server ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --create-home --shell /usr/sbin/nologin debug-tunnel \
+    && usermod -p '*' debug-tunnel \
     && mkdir -p /run/sshd /home/debug-tunnel/.ssh /etc/ssh/host_keys \
     && chown -R debug-tunnel:debug-tunnel /home/debug-tunnel/.ssh \
     && chmod 700 /home/debug-tunnel/.ssh

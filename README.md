@@ -84,9 +84,11 @@ Generate one keypair per operator on the operator PC:
 
 ```powershell
 ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\vsp_debug_tunnel_ed25519" -C "vsp-debug-tunnel-$env:USERNAME"
+Get-Content "$env:USERPROFILE\.ssh\vsp_debug_tunnel_ed25519.pub"
 ```
 
-Create the mounted authorized keys file and add each operator public key:
+Create the mounted authorized keys file and add each operator public key. Only
+paste `.pub` content; never copy or share private keys:
 
 ```bash
 cp deploy/authorized_keys.example deploy/authorized_keys

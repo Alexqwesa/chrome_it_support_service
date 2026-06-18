@@ -74,6 +74,18 @@ function Get-OutputPath([string]$PreferredPath) {
     return $fallback
 }
 
+function Get-SecretFingerprint([string]$Value) {
+    if ([string]::IsNullOrEmpty($Value)) {
+        return "empty"
+    }
+    [UInt64]$hash = 2166136261
+    foreach ($byte in [System.Text.Encoding]::UTF8.GetBytes($Value)) {
+        $hash = [UInt64]($hash -bxor [UInt64]$byte)
+        $hash = [UInt64](($hash * [UInt64]16777619) % [UInt64]4294967296)
+    }
+    return "len=$($Value.Length), fnv32=$($hash.ToString("x8"))"
+}
+
 $envValues = Read-DotEnv ".env"
 $devToken = if ($envValues.ContainsKey("AGENT_ENROLLMENT_TOKEN") -and ![string]::IsNullOrWhiteSpace($envValues["AGENT_ENROLLMENT_TOKEN"])) {
     [string]$envValues["AGENT_ENROLLMENT_TOKEN"]
@@ -81,7 +93,7 @@ $devToken = if ($envValues.ContainsKey("AGENT_ENROLLMENT_TOKEN") -and ![string]:
     "dev-agent-token"
 }
 $devOutput = Get-OutputPath "build/client_debug_agent_dev.exe"
-$configuredOutput = Get-OutputPath "build/client_debug_agent_configured.exe"
+$configuredOutput = Get-OutputPath "build/client_debug_agent.exe"
 
 $devArgs = @(
     "compile", "exe", "bin/client.dart",
@@ -107,4 +119,6 @@ Invoke-Dart $configuredArgs
 Write-Host ""
 Write-Host "Built:"
 Write-Host "  $devOutput"
+Write-Host "    AGENT_ENROLLMENT_TOKEN: $(Get-SecretFingerprint $devToken)"
 Write-Host "  $configuredOutput"
+Write-Host "    AGENT_ENROLLMENT_TOKEN: $(Get-SecretFingerprint (Require-Value $envValues "AGENT_ENROLLMENT_TOKEN"))"

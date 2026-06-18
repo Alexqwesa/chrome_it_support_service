@@ -10,7 +10,10 @@ String renderSessionsPage(
   required bool canDisconnect,
 }) {
   final rows = sessions.map((session) {
-    final json = session.toJson(sshHost: sshHost, sshPort: sshPort);
+    final json = session.toJson(
+      sshHost: sshHost,
+      sshPort: sshPort,
+    );
     final command = json['sshCommand']! as String;
     final disconnectButton = canDisconnect
         ? '<button class="danger" onclick=\'disconnectSession(${jsonEncode(session.id)})\'>Disconnect</button>'
