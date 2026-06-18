@@ -12,7 +12,7 @@ PermitRootLogin no
 AuthenticationMethods publickey
 
 AllowUsers debug-tunnel
-AuthorizedKeysFile .ssh/authorized_keys
+AuthorizedKeysFile /data/authorized_keys
 StrictModes no
 
 AllowTcpForwarding local

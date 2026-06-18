@@ -44,4 +44,18 @@ void main() {
 
     expect(() => manager.add('not a public key'), throwsFormatException);
   });
+
+  test('authorized keys manager repairs an empty directory at the file path',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('keys-manager-');
+    addTearDown(() => directory.delete(recursive: true));
+    final keyPath = '${directory.path}/authorized_keys';
+    await Directory(keyPath).create();
+    final manager = AuthorizedKeysManager(keyPath);
+
+    await manager.add('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest operator-a');
+
+    expect(await FileSystemEntity.type(keyPath), FileSystemEntityType.file);
+    expect(await manager.list(), hasLength(1));
+  });
 }

@@ -178,7 +178,8 @@ class RelayServer {
           final form = await _readForm(request);
           await _keysManager.add(form['key'] ?? '');
           return _redirect(request, '/admin/keys?message=Key%20added.');
-        } on Object catch (error) {
+        } on Object catch (error, stackTrace) {
+          _logAdminError(request, error, stackTrace);
           return _renderKeysAdmin(request, error: '$error');
         }
       }
@@ -201,7 +202,8 @@ class RelayServer {
             case 'enable':
               await _keysManager.enable(index);
           }
-        } on Object catch (error) {
+        } on Object catch (error, stackTrace) {
+          _logAdminError(request, error, stackTrace);
           return _renderKeysAdmin(request, error: '$error');
         }
         return _redirect(request, '/admin/keys?message=Key%20updated.');
@@ -214,7 +216,8 @@ class RelayServer {
             request,
             '/admin/keys?message=sshd%20reload%20requested.',
           );
-        } on Object catch (error) {
+        } on Object catch (error, stackTrace) {
+          _logAdminError(request, error, stackTrace);
           return _renderKeysAdmin(request, error: '$error');
         }
       }
@@ -265,7 +268,9 @@ class RelayServer {
     }
     final file = File(path);
     await file.parent.create(recursive: true);
-    await file.writeAsString(DateTime.now().toUtc().toIso8601String());
+    final timestamp = DateTime.now().toUtc().toIso8601String();
+    await file.writeAsString(timestamp);
+    stdout.writeln('Requested sshd reload via $path at $timestamp.');
   }
 
   Future<void> _acceptAgent(HttpRequest request) async {
@@ -441,6 +446,17 @@ class RelayServer {
       'Server local port: 127.0.0.1:${session.serverPort}\n'
       'Client Chrome: 127.0.0.1:${session.registration.localChromePort}\n'
       'Connected at: ${session.connectedAt.toLocal()}',
+    );
+  }
+
+  void _logAdminError(
+    HttpRequest request,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    stderr.writeln(
+      'Admin request failed: ${request.method} ${request.uri.path}: '
+      '$error\n$stackTrace',
     );
   }
 }

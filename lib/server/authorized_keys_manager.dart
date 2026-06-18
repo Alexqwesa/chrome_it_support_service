@@ -113,17 +113,42 @@ class AuthorizedKeysManager {
   }
 
   Future<List<String>> _readLines() async {
-    final file = File(path);
+    final file = await _ensureFile();
     if (!await file.exists()) return <String>[];
     final content = await file.readAsString();
     return const LineSplitter().convert(content);
   }
 
   Future<void> _writeLines(List<String> lines) async {
-    final file = File(path);
-    await file.parent.create(recursive: true);
+    final file = await _ensureFile();
     final normalized = lines.isEmpty ? '' : '${lines.join('\n')}\n';
     await file.writeAsString(normalized);
+  }
+
+  Future<File> _ensureFile() async {
+    final file = File(path);
+    final type = await FileSystemEntity.type(path);
+    if (type == FileSystemEntityType.directory) {
+      final directory = Directory(path);
+      if (await directory.list().isEmpty) {
+        await directory.delete();
+        stderr.writeln(
+          'Repaired authorized_keys path: replaced empty directory at '
+          '$path with a file.',
+        );
+      } else {
+        throw FileSystemException(
+          'authorized_keys path is a non-empty directory. Remove it and create '
+          'a file instead.',
+          path,
+        );
+      }
+    }
+    await file.parent.create(recursive: true);
+    if (!await file.exists()) {
+      await file.create();
+    }
+    return file;
   }
 
   AuthorizedKeyEntry? _parseEntry(int index, String line) {

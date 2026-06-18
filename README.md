@@ -94,14 +94,24 @@ cp deploy/authorized_keys.example deploy/authorized_keys
 docker compose up -d --build ssh-relay
 ```
 
+`docker-compose.yml` mounts the `deploy` directory, not the individual
+`authorized_keys` file. This lets the admin page create
+`deploy/authorized_keys` if it does not exist yet, and avoids Docker creating a
+directory at the file path when the file is missing.
+
+SSH server host keys are stored in the Docker volume `ssh_host_keys`. Do not
+copy `deploy/ssh_host_keys` to production; host private keys need Linux file
+permissions such as `0600`, and bind mounts from some hosts can expose them as
+too open for OpenSSH.
+
 After `ADMIN_PASSWORD` is configured, open
 `https://softapp.vietsov.com.vn:9999/admin/keys` to add, edit, disable, or
 delete keys through the server admin page. The main `/debug-sessions` page links
 to this admin page, but the password prompt is enforced only by the Dart server.
 The reload button signals the Docker ssh-relay sidecar through a shared marker
-file. New `authorized_keys` entries are normally read by OpenSSH without a
-reload, but the button is available when you want to force sshd to re-read its
-configuration.
+file in the mounted `deploy` directory. New `authorized_keys` entries are
+normally read by OpenSSH without a reload, but the button is available when you
+want to force sshd to re-read its configuration.
 
 Install `deploy/operator_ssh_config.example` in each operator's SSH config.
 This file is only a client-side convenience alias; it is not required on the
