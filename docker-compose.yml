@@ -6,9 +6,8 @@ services:
     env_file:
       - .env
     ports:
-      # Expose the read-only connection list on the local network by default.
-      # Set SERVER_HTTP_PUBLISH_BIND=127.0.0.1 if nginx is the only frontend.
-      - "${SERVER_HTTP_PUBLISH_BIND:-0.0.0.0}:18080:8080"
+      # Backend HTTP for nginx. Keep loopback-only in production.
+      - "${SERVER_HTTP_PUBLISH_BIND:-127.0.0.1}:${SERVER_HTTP_PUBLISH_PORT:-9998}:${SERVER_HTTP_PORT:-9998}"
       - "127.0.0.1:18081:8081" # reserved for a future separate admin listener
       - "127.0.0.1:41000-41049:41000-41049"
     security_opt:

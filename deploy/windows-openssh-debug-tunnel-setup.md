@@ -62,9 +62,60 @@ Get-LocalGroupMember Administrators | Where-Object Name -like "*debug-tunnel*"
 
 The command above should return nothing.
 
+## Generate operator SSH keys on the operator PC
+
+Generate one keypair per operator while logged in as the operator's normal
+Windows account. Do not log in locally as `debug-tunnel` for this step:
+
+```powershell
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\vsp_debug_tunnel_ed25519" -C "vsp-debug-tunnel-$env:USERNAME"
+```
+
+This creates:
+
+```text
+%USERPROFILE%\.ssh\vsp_debug_tunnel_ed25519
+%USERPROFILE%\.ssh\vsp_debug_tunnel_ed25519.pub
+```
+
+`%USERPROFILE%` is the current operator user's profile, for example
+`C:\Users\ivan\.ssh\...`. It is not `C:\Users\debug-tunnel`.
+
+Keep the private key on the operator PC under the operator's user profile. Copy
+only the `.pub` line to the relay server.
+
+Optional operator-side SSH config:
+
+```sshconfig
+Host softapp-relay
+    HostName softapp.vietsov.com.vn
+    Port 2222
+    User debug-tunnel
+    IdentityFile ~/.ssh/vsp_debug_tunnel_ed25519
+    IdentitiesOnly yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+    ExitOnForwardFailure yes
+```
+
+Purpose: this tells the operator's SSH client which private key to use and only
+shortens operator commands. It does not belong in `C:\Users\debug-tunnel` on the
+server. With it, an operator can run:
+
+```powershell
+ssh -N -L 9333:127.0.0.1:41000 softapp-relay
+```
+
+Without it, use the full command:
+
+```powershell
+ssh -p 2222 -i "$env:USERPROFILE\.ssh\vsp_debug_tunnel_ed25519" -N -L 9333:127.0.0.1:41000 debug-tunnel@softapp.vietsov.com.vn
+```
+
 ## Add operator public keys
 
-Create the `.ssh` directory:
+On the relay server, create the `.ssh` directory for the remote `debug-tunnel`
+account:
 
 ```powershell
 $sshDir = "C:\Users\debug-tunnel\.ssh"
@@ -72,11 +123,22 @@ New-Item -ItemType Directory -Force $sshDir | Out-Null
 New-Item -ItemType File -Force "$sshDir\authorized_keys" | Out-Null
 ```
 
-Append each operator public key to:
+Append each operator public key to the remote `debug-tunnel` account:
 
 ```text
 C:\Users\debug-tunnel\.ssh\authorized_keys
 ```
+
+Example from the server, after receiving the public key text:
+
+```powershell
+Add-Content `
+  -Path "C:\Users\debug-tunnel\.ssh\authorized_keys" `
+  -Value "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... vsp-debug-tunnel-operator"
+```
+
+Add each operator public key as a separate line. Do not put private keys on the
+server and do not generate operator private keys under `C:\Users\debug-tunnel`.
 
 Fix ACLs so OpenSSH accepts the file:
 

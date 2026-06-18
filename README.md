@@ -22,8 +22,9 @@ secret, rotate it when exposed, and do not use it as an admin credential.
 
 ## Server deployment
 
-1. Copy the environment example and replace the agent token. Set
-   `ADMIN_PASSWORD` only if you want admin actions such as disconnect:
+1. Copy the environment example and edit the production section at the top of
+   `.env`. At minimum, replace `AGENT_ENROLLMENT_TOKEN`. Set `ADMIN_PASSWORD`
+   only if you want admin actions such as disconnect:
 
    ```bash
    cp .env.example .env
@@ -42,7 +43,7 @@ secret, rotate it when exposed, and do not use it as an admin credential.
 
    ```bash
    docker compose ps
-   curl http://127.0.0.1:8080/health
+   curl http://127.0.0.1:9998/health
    ```
 
 3. Install the nginx example from
@@ -57,15 +58,20 @@ secret, rotate it when exposed, and do not use it as an admin credential.
    sudo systemctl reload nginx
    ```
 
+   The example listens on HTTPS port `9999` and proxies to the Dart relay
+   backend on `127.0.0.1:9998`. This avoids a port conflict when nginx and the
+   Dart relay run on the same host.
+
 4. Adjust the nginx `allow` networks before deployment. `/agent` must remain
    reachable by supported user PCs, while `/debug-sessions` and
    `GET /api/sessions` should be limited to the local network or IT VPN.
 
 The service binds tunnel ports to `0.0.0.0` **inside the container** so Docker
 can publish them. `docker-compose.yml` publishes tunnel ports only to host
-`127.0.0.1`, so they are not directly reachable from the LAN. The HTTP list
-port is published on `${SERVER_HTTP_PUBLISH_BIND:-0.0.0.0}:18080`; set
-`SERVER_HTTP_PUBLISH_BIND=127.0.0.1` when nginx is the only frontend.
+`127.0.0.1`, so they are not directly reachable from the LAN. The Dart backend
+HTTP port is published on
+`${SERVER_HTTP_PUBLISH_BIND:-127.0.0.1}:${SERVER_HTTP_PUBLISH_PORT:-9998}`;
+keep it loopback-only when nginx is the public frontend.
 
 ## Restricted SSH setup
 
@@ -93,6 +99,8 @@ sudo systemctl reload sshd  # use "ssh" on Debian/Ubuntu if required
 ```
 
 Install `deploy/operator_ssh_config.example` in each operator's SSH config.
+This file is only a client-side convenience alias; it is not required on the
+server because the full command also works.
 Verify that a shell and arbitrary forwarding fail:
 
 ```bash
@@ -111,8 +119,8 @@ powershell -ExecutionPolicy Bypass -File tool/build_clients.ps1
 
 This creates two client executables:
 
-- `build/client_debug_agent_dev.exe`: compiled with localhost URL
-  (`http://127.0.0.1:8080`) and the current `.env` `AGENT_ENROLLMENT_TOKEN`
+- `build/client_debug_agent_dev.exe`: compiled with localhost backend URL
+  (`http://127.0.0.1:9998`) and the current `.env` `AGENT_ENROLLMENT_TOKEN`
   when available, otherwise `dev-agent-token`.
 - `build/client_debug_agent_configured.exe`: compiled with the current `.env`
   values for `RELAY_SERVER_URL`, `AGENT_ENROLLMENT_TOKEN`, and `AGENT_VERSION`.
@@ -129,7 +137,7 @@ uses the first free port in `9222-9299`, and creates a temporary profile.
 ## Operator workflow
 
 1. Ask the user to run the client and keep its console open.
-2. Open `https://softapp.vietsov.com.vn/debug-sessions`.
+2. Open `https://softapp.vietsov.com.vn:9999/debug-sessions`.
 3. Find the PC and copy its SSH command.
 4. Run the command, for example:
 
@@ -154,34 +162,18 @@ dart run bin/server.dart
 In a second Windows shell:
 
 ```powershell
-$env:RELAY_SERVER_URL = "http://127.0.0.1:8080"
+$env:RELAY_SERVER_URL = "http://127.0.0.1:9998"
 $env:AGENT_ENROLLMENT_TOKEN = "local-agent-token"
 dart run bin/client.dart
 ```
 
-Open `http://127.0.0.1:8080/debug-sessions` and authenticate as `admin` with
+Open `http://127.0.0.1:9998/debug-sessions` and authenticate as `admin` with
 the configured admin password only if `SESSION_LIST_REQUIRES_AUTH=true`.
 
 ## Configuration
 
-| Variable | Component | Default | Purpose |
-| --- | --- | --- | --- |
-| `ADMIN_USERNAME` | server | `admin` | Status/API Basic-auth username |
-| `ADMIN_PASSWORD` | server | optional | Enables protected admin actions such as disconnect |
-| `SESSION_LIST_REQUIRES_AUTH` | server | `false` | Require Basic auth for `GET /debug-sessions` and `GET /api/sessions` |
-| `AGENT_ENROLLMENT_TOKEN` | both | required | Agent WebSocket bearer token |
-| `SERVER_HTTP_PORT` | server | `8080` | HTTP/WebSocket listener port |
-| `SERVER_HTTP_BIND` | server | `0.0.0.0` | HTTP listener address |
-| `SERVER_TUNNEL_BIND` | server | `127.0.0.1` | Relay listener address; Docker uses `0.0.0.0` |
-| `SERVER_HTTP_PUBLISH_BIND` | compose | `0.0.0.0` | Host bind address for the read-only HTTP list |
-| `SERVER_PORT_START/END` | server | `41000/41049` | Fixed relay range |
-| `SSH_RELAY_HOST` | server | `debug-tunnel@softapp.vietsov.com.vn` | SSH target shown in copied SSH commands |
-| `SSH_RELAY_PORT` | server | `2222` | SSH port shown in copied SSH commands |
-| `HEARTBEAT_TIMEOUT_SECONDS` | server | `60` | Stale-agent timeout |
-| `SESSION_TIMEOUT_SECONDS` | server | `28800` | Maximum session lifetime |
-| `RELAY_SERVER_URL` | client | required | Public relay URL, normally HTTPS |
-| `CHROME_PATH` | client | auto-detected | Optional full path to Chrome |
-| `AGENT_VERSION` | client | `1.0.0` | Version shown in logs |
+Use `.env.example` as the configuration reference. Values that must be changed
+for production are grouped at the top; safe defaults are below them.
 
 The JSON list endpoint is `GET /api/sessions`. Each row includes both legacy
 camelCase fields and explicit snake_case fields, including

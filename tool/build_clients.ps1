@@ -86,7 +86,7 @@ $configuredOutput = Get-OutputPath "build/client_debug_agent_configured.exe"
 $devArgs = @(
     "compile", "exe", "bin/client.dart",
     "-o", $devOutput,
-    "-DDEFAULT_RELAY_SERVER_URL=http://127.0.0.1:8080",
+    "-DDEFAULT_RELAY_SERVER_URL=http://127.0.0.1:9998",
     "-DDEFAULT_AGENT_ENROLLMENT_TOKEN=$devToken",
     "-DDEFAULT_AGENT_VERSION=dev"
 )

@@ -11,7 +11,7 @@ import 'session_registry.dart';
 
 class RelayServerConfig {
   RelayServerConfig.fromEnvironment(Map<String, String> env)
-      : httpPort = _int(env, 'SERVER_HTTP_PORT', 8080),
+      : httpPort = _int(env, 'SERVER_HTTP_PORT', 9998),
         httpBind = env['SERVER_HTTP_BIND'] ?? '0.0.0.0',
         tunnelBind = env['SERVER_TUNNEL_BIND'] ?? '127.0.0.1',
         portStart = _int(env, 'SERVER_PORT_START', 41000),
