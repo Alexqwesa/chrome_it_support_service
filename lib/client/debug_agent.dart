@@ -56,12 +56,22 @@ class DebugAgent {
     stdout.writeln('Chrome debug endpoint: 127.0.0.1:${_chrome!.port}\n');
 
     final agentUri = _agentUri(config.serverUrl);
-    _webSocket = await WebSocket.connect(
-      agentUri.toString(),
-      headers: <String, dynamic>{
-        HttpHeaders.authorizationHeader: 'Bearer ${config.agentToken}',
-      },
-    );
+    try {
+      _webSocket = await WebSocket.connect(
+        agentUri.toString(),
+        headers: <String, dynamic>{
+          HttpHeaders.authorizationHeader: 'Bearer ${config.agentToken}',
+        },
+      );
+    } on WebSocketException catch (error) {
+      if ('$error'.contains('HTTP status code: 401')) {
+        throw StateError(
+          'Server rejected AGENT_ENROLLMENT_TOKEN. Rebuild the client with '
+          'the same token as the server or override it at runtime.',
+        );
+      }
+      rethrow;
+    }
     _webSocket!.listen(
       _handleFrame,
       onDone: () => unawaited(stop('server disconnected')),

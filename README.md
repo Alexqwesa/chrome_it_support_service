@@ -108,8 +108,9 @@ powershell -ExecutionPolicy Bypass -File tool/build_clients.ps1
 
 This creates two client executables:
 
-- `build/client_debug_agent_dev.exe`: compiled with localhost defaults
-  (`http://127.0.0.1:8080` and `dev-agent-token`).
+- `build/client_debug_agent_dev.exe`: compiled with localhost URL
+  (`http://127.0.0.1:8080`) and the current `.env` `AGENT_ENROLLMENT_TOKEN`
+  when available, otherwise `dev-agent-token`.
 - `build/client_debug_agent_configured.exe`: compiled with the current `.env`
   values for `RELAY_SERVER_URL`, `AGENT_ENROLLMENT_TOKEN`, and `AGENT_VERSION`.
 
