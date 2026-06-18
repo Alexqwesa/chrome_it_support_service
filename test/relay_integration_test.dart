@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -23,7 +24,6 @@ void main() {
         'SERVER_PORT_START': '$tunnelPort',
         'SERVER_PORT_END': '$tunnelPort',
         'AGENT_ENROLLMENT_TOKEN': 'agent-test-token',
-        'ADMIN_PASSWORD': 'admin-test-password',
       }),
     );
     await server.start();
@@ -59,6 +59,13 @@ void main() {
     );
 
     final port = await assigned.future.timeout(const Duration(seconds: 5));
+    final sessions = await _getJsonList(
+      Uri.parse('http://127.0.0.1:${server.boundHttpPort}/api/sessions'),
+    );
+    expect(sessions, hasLength(1));
+    expect(sessions.single['server_local_port'], port);
+    expect(sessions.single['time_of_begin_of_connection'], isA<String>());
+
     final operator = await Socket.connect(InternetAddress.loopbackIPv4, port);
     addTearDown(operator.destroy);
     final response = Completer<List<int>>();
@@ -72,4 +79,17 @@ void main() {
       <int>[4, 5, 6],
     );
   });
+}
+
+Future<List<dynamic>> _getJsonList(Uri uri) async {
+  final client = HttpClient();
+  try {
+    final request = await client.getUrl(uri);
+    final response = await request.close();
+    final body = await utf8.decodeStream(response);
+    expect(response.statusCode, HttpStatus.ok);
+    return jsonDecode(body) as List<dynamic>;
+  } finally {
+    client.close(force: true);
+  }
 }

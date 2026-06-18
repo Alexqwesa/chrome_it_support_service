@@ -9,9 +9,11 @@ restricted SSH local-forward.
 
 - Client Chrome debug endpoints bind only to `127.0.0.1`.
 - Relay ports use the fixed `41000-41049` range.
-- Docker publishes HTTP and relay ports only on host loopback.
+- Docker can publish the read-only connection list to the LAN.
+- Docker publishes relay tunnel ports only on host loopback.
 - Agents authenticate with a revocable enrollment token.
-- The status page and JSON/admin actions require Basic authentication.
+- The status page and `GET /api/sessions` are read-only and public by default.
+- Disconnect/admin actions require Basic authentication when enabled.
 - Heartbeat and maximum-session timeouts remove stale sessions.
 - SSH examples allow only local forwarding to the relay range and no shell.
 
@@ -20,7 +22,8 @@ secret, rotate it when exposed, and do not use it as an admin credential.
 
 ## Server deployment
 
-1. Copy the environment example and replace every secret:
+1. Copy the environment example and replace the agent token. Set
+   `ADMIN_PASSWORD` only if you want admin actions such as disconnect:
 
    ```bash
    cp .env.example .env
@@ -30,6 +33,11 @@ secret, rotate it when exposed, and do not use it as an admin credential.
    docker compose logs -f debug-relay
    ```
 
+   Docker Compose interpolates `$NAME` patterns in env files. If a generated
+   token/password contains `$`, either regenerate it without `$`, single-quote
+   the value, or escape `$` as `$$` so the container receives the intended
+   secret.
+
 2. Confirm loopback-only publishing:
 
    ```bash
@@ -38,8 +46,10 @@ secret, rotate it when exposed, and do not use it as an admin credential.
    ```
 
 3. Install the nginx example from
-   `deploy/nginx-debug-relay.conf.example`. Create the Basic-auth file using the
-   same username/password configured by `ADMIN_USERNAME` and `ADMIN_PASSWORD`:
+   `deploy/nginx-debug-relay.conf.example`. It exposes the read-only session
+   list to configured internal networks and protects only the optional admin
+   mutation endpoint. If `ADMIN_PASSWORD` is configured, create the Basic-auth
+   file using the same username/password:
 
    ```bash
    sudo htpasswd -c /etc/nginx/.htpasswd-debug-relay admin
@@ -48,12 +58,14 @@ secret, rotate it when exposed, and do not use it as an admin credential.
    ```
 
 4. Adjust the nginx `allow` networks before deployment. `/agent` must remain
-   reachable by supported user PCs, while `/debug-sessions` and `/api/` should
-   be limited to the IT VPN or internal network.
+   reachable by supported user PCs, while `/debug-sessions` and
+   `GET /api/sessions` should be limited to the local network or IT VPN.
 
 The service binds tunnel ports to `0.0.0.0` **inside the container** so Docker
-can publish them. `docker-compose.yml` publishes them only to host
-`127.0.0.1`, so they are not directly reachable from the LAN.
+can publish them. `docker-compose.yml` publishes tunnel ports only to host
+`127.0.0.1`, so they are not directly reachable from the LAN. The HTTP list
+port is published on `${SERVER_HTTP_PUBLISH_BIND:-0.0.0.0}:18080`; set
+`SERVER_HTTP_PUBLISH_BIND=127.0.0.1` when nginx is the only frontend.
 
 ## Restricted SSH setup
 
@@ -137,18 +149,20 @@ dart run bin/client.dart
 ```
 
 Open `http://127.0.0.1:8080/debug-sessions` and authenticate as `admin` with
-the configured admin password.
+the configured admin password only if `SESSION_LIST_REQUIRES_AUTH=true`.
 
 ## Configuration
 
 | Variable | Component | Default | Purpose |
 | --- | --- | --- | --- |
 | `ADMIN_USERNAME` | server | `admin` | Status/API Basic-auth username |
-| `ADMIN_PASSWORD` | server | required | Status/API Basic-auth password |
+| `ADMIN_PASSWORD` | server | optional | Enables protected admin actions such as disconnect |
+| `SESSION_LIST_REQUIRES_AUTH` | server | `false` | Require Basic auth for `GET /debug-sessions` and `GET /api/sessions` |
 | `AGENT_ENROLLMENT_TOKEN` | both | required | Agent WebSocket bearer token |
 | `SERVER_HTTP_PORT` | server | `8080` | HTTP/WebSocket listener port |
 | `SERVER_HTTP_BIND` | server | `0.0.0.0` | HTTP listener address |
 | `SERVER_TUNNEL_BIND` | server | `127.0.0.1` | Relay listener address; Docker uses `0.0.0.0` |
+| `SERVER_HTTP_PUBLISH_BIND` | compose | `0.0.0.0` | Host bind address for the read-only HTTP list |
 | `SERVER_PORT_START/END` | server | `41000/41049` | Fixed relay range |
 | `OPERATOR_SSH_HOST` | server | `vsp-debug` | Alias shown in copied SSH commands |
 | `HEARTBEAT_TIMEOUT_SECONDS` | server | `60` | Stale-agent timeout |
@@ -156,6 +170,22 @@ the configured admin password.
 | `RELAY_SERVER_URL` | client | required | Public relay URL, normally HTTPS |
 | `CHROME_PATH` | client | auto-detected | Optional full path to Chrome |
 | `AGENT_VERSION` | client | `1.0.0` | Version shown in logs |
+
+The JSON list endpoint is `GET /api/sessions`. Each row includes both legacy
+camelCase fields and explicit snake_case fields, including
+`time_of_begin_of_connection` and `server_local_port`.
+
+## Environment loading
+
+Both binaries load configuration in this order:
+
+1. `.env.example`
+2. `.env`
+3. Real process environment variables
+
+Later sources override earlier sources. This means `.env.example` can provide
+local defaults, `.env` can provide machine-specific values, and Docker/CI can
+still inject final overrides.
 
 ## Verification
 

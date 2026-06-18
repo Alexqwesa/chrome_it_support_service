@@ -25,8 +25,10 @@ class RelaySession {
       'id': id,
       ...registration.toJson(),
       'serverPort': serverPort,
+      'server_local_port': serverPort,
       'serverAddress': '127.0.0.1:$serverPort',
       'connectedAt': connectedAt.toIso8601String(),
+      'time_of_begin_of_connection': connectedAt.toIso8601String(),
       'lastHeartbeat': lastHeartbeat.toIso8601String(),
       'sshCommand': 'ssh -N -L 9333:127.0.0.1:$serverPort $sshHost',
     };

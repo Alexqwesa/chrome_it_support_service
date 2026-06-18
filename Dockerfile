@@ -2,6 +2,7 @@ FROM dart:stable AS build
 WORKDIR /app
 COPY pubspec.yaml pubspec.lock analysis_options.yaml ./
 RUN dart pub get
+COPY .env.example ./
 COPY bin ./bin
 COPY lib ./lib
 RUN dart compile exe bin/server.dart -o /app/debug_relay_server

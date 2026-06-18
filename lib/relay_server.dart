@@ -18,7 +18,9 @@ class RelayServerConfig {
         portEnd = _int(env, 'SERVER_PORT_END', 41049),
         agentToken = _required(env, 'AGENT_ENROLLMENT_TOKEN'),
         adminUsername = env['ADMIN_USERNAME'] ?? 'admin',
-        adminPassword = _required(env, 'ADMIN_PASSWORD'),
+        adminPassword = _optionalSecret(env, 'ADMIN_PASSWORD'),
+        sessionListRequiresAuth =
+            _bool(env, 'SESSION_LIST_REQUIRES_AUTH', false),
         operatorSshHost = env['OPERATOR_SSH_HOST'] ?? 'vsp-debug',
         heartbeatTimeout = Duration(
           seconds: _int(env, 'HEARTBEAT_TIMEOUT_SECONDS', 60),
@@ -34,7 +36,8 @@ class RelayServerConfig {
   final int portEnd;
   final String agentToken;
   final String adminUsername;
-  final String adminPassword;
+  final String? adminPassword;
+  final bool sessionListRequiresAuth;
   final String operatorSshHost;
   final Duration heartbeatTimeout;
   final Duration sessionTimeout;
@@ -43,10 +46,27 @@ class RelayServerConfig {
     return int.tryParse(env[key] ?? '') ?? fallback;
   }
 
+  static bool _bool(Map<String, String> env, String key, bool fallback) {
+    final value = env[key]?.trim().toLowerCase();
+    if (value == null || value.isEmpty) return fallback;
+    return value == '1' || value == 'true' || value == 'yes' || value == 'on';
+  }
+
   static String _required(Map<String, String> env, String key) {
     final value = env[key];
     if (value == null || value.isEmpty || value == 'change-me') {
       throw StateError('$key must be set to a non-default value.');
+    }
+    return value;
+  }
+
+  static String? _optionalSecret(Map<String, String> env, String key) {
+    final value = env[key];
+    if (value == null ||
+        value.isEmpty ||
+        value == 'change-me' ||
+        value.startsWith('replace-with-')) {
+      return null;
     }
     return value;
   }
@@ -94,25 +114,24 @@ class RelayServer {
       if (request.uri.path == '/agent') {
         return _acceptAgent(request);
       }
-      if (!_isAdmin(request)) {
-        request.response.headers.set(
-          HttpHeaders.wwwAuthenticateHeader,
-          'Basic realm="Chrome debug relay"',
-        );
-        return _text(
-            request, HttpStatus.unauthorized, 'Authentication required.');
-      }
       if (request.uri.path == '/debug-sessions' && request.method == 'GET') {
+        if (config.sessionListRequiresAuth && !await _requireAdmin(request)) {
+          return;
+        }
         request.response.headers.contentType = ContentType.html;
         request.response.write(
           renderSessionsPage(
             _registry.sessions,
             sshHost: config.operatorSshHost,
+            canDisconnect: config.adminPassword != null,
           ),
         );
         return request.response.close();
       }
       if (request.uri.path == '/api/sessions' && request.method == 'GET') {
+        if (config.sessionListRequiresAuth && !await _requireAdmin(request)) {
+          return;
+        }
         return _json(
           request,
           HttpStatus.ok,
@@ -124,6 +143,7 @@ class RelayServer {
       final match = RegExp(r'^/api/sessions/([^/]+)/disconnect$')
           .firstMatch(request.uri.path);
       if (match != null && request.method == 'POST') {
+        if (!await _requireAdmin(request)) return;
         final id = Uri.decodeComponent(match.group(1)!);
         if (_registry[id] == null) {
           return _text(request, HttpStatus.notFound, 'Session not found.');
@@ -276,14 +296,34 @@ class RelayServer {
   }
 
   bool _isAdmin(HttpRequest request) {
+    final password = config.adminPassword;
+    if (password == null) return false;
     final header = request.headers.value(HttpHeaders.authorizationHeader);
     if (header == null || !header.startsWith('Basic ')) return false;
     try {
       final credentials = utf8.decode(base64Decode(header.substring(6)));
-      return credentials == '${config.adminUsername}:${config.adminPassword}';
+      return credentials == '${config.adminUsername}:$password';
     } on FormatException {
       return false;
     }
+  }
+
+  Future<bool> _requireAdmin(HttpRequest request) async {
+    if (_isAdmin(request)) return true;
+    if (config.adminPassword == null) {
+      await _text(
+        request,
+        HttpStatus.forbidden,
+        'Admin password is not configured for this operation.',
+      );
+      return false;
+    }
+    request.response.headers.set(
+      HttpHeaders.wwwAuthenticateHeader,
+      'Basic realm="Chrome debug relay"',
+    );
+    await _text(request, HttpStatus.unauthorized, 'Authentication required.');
+    return false;
   }
 
   void _logConnected(RelaySession session) {

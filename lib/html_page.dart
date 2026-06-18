@@ -5,21 +5,26 @@ import 'session_registry.dart';
 String renderSessionsPage(
   Iterable<RelaySession> sessions, {
   required String sshHost,
+  required bool canDisconnect,
 }) {
   final rows = sessions.map((session) {
     final json = session.toJson(sshHost: sshHost);
     final command = json['sshCommand']! as String;
+    final disconnectButton = canDisconnect
+        ? '<button class="danger" onclick=\'disconnectSession(${jsonEncode(session.id)})\'>Disconnect</button>'
+        : '';
     return '''
       <tr>
         <td><span class="online">Online</span></td>
         <td>${_escape(session.registration.pcName)}</td>
         <td>${_escape(session.registration.windowsUser)}</td>
         <td><code>127.0.0.1:${session.serverPort}</code></td>
+        <td>${_escape(session.connectedAt.toLocal().toString())}</td>
         <td><span data-duration="${session.connectedAt.toIso8601String()}"></span></td>
         <td>${_escape(session.lastHeartbeat.toLocal().toString())}</td>
         <td class="actions">
           <button onclick='copyCommand(${jsonEncode(command)})'>Copy SSH command</button>
-          <button class="danger" onclick='disconnectSession(${jsonEncode(session.id)})'>Disconnect</button>
+          $disconnectButton
         </td>
       </tr>''';
   }).join();
@@ -48,8 +53,8 @@ String renderSessionsPage(
   <h1>Chrome Debug Sessions</h1>
   <p class="warning">Close the SSH tunnel after support is finished.</p>
   <table>
-    <thead><tr><th>Status</th><th>PC name</th><th>User</th><th>Server port</th><th>Duration</th><th>Last heartbeat</th><th>Actions</th></tr></thead>
-    <tbody>${rows.isEmpty ? '<tr><td colspan="7">No active sessions.</td></tr>' : rows}</tbody>
+    <thead><tr><th>Status</th><th>PC name</th><th>User</th><th>Server local port</th><th>Connected at</th><th>Duration</th><th>Last heartbeat</th><th>Actions</th></tr></thead>
+    <tbody>${rows.isEmpty ? '<tr><td colspan="8">No active sessions.</td></tr>' : rows}</tbody>
   </table>
   <script>
     function copyCommand(command) {
