@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'agent_protocol.dart';
+import '../shared/agent_protocol.dart';
 
 class RelaySession {
   RelaySession({

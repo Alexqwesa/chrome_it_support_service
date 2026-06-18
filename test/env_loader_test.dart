@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:chrome_it_support_service/env_loader.dart';
+import 'package:chrome_it_support_service/shared/env_loader.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -29,5 +29,28 @@ ENV_ONLY=yes
     expect(merged['EXAMPLE_ONLY'], 'yes');
     expect(merged['ENV_ONLY'], 'yes');
     expect(merged['QUOTED'], 'hello world');
+  });
+
+  test('compiled defaults are lower priority than files and process env',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('env-loader-test-');
+    addTearDown(() => directory.delete(recursive: true));
+
+    final env = File('${directory.path}/.env');
+    await env.writeAsString('VALUE=from-env\n');
+
+    final loaded = await loadMergedEnvironmentWithSources(
+      defaults: <String, String>{
+        'VALUE': 'from-default',
+        'DEFAULT_ONLY': 'yes',
+      },
+      files: <String>[env.path],
+      processEnvironment: <String, String>{'VALUE': 'from-process'},
+    );
+
+    expect(loaded.values['VALUE'], 'from-process');
+    expect(loaded.sources['VALUE'], 'process environment');
+    expect(loaded.values['DEFAULT_ONLY'], 'yes');
+    expect(loaded.sources['DEFAULT_ONLY'], 'compiled defaults');
   });
 }

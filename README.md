@@ -103,14 +103,21 @@ Build on Windows:
 
 ```powershell
 dart pub get
-dart compile exe bin/client.dart -o build/client_debug_agent.exe
-Copy-Item deploy/run-client.example.ps1 build/run-client.ps1
+powershell -ExecutionPolicy Bypass -File tool/build_clients.ps1
 ```
 
-Edit `build/run-client.ps1` with the public HTTPS relay URL and enrollment
-token, then distribute it with `client_debug_agent.exe`. For production,
-prefer injecting the token through managed device configuration instead of
-shipping a permanent token beside the executable. Code-sign the executable.
+This creates two client executables:
+
+- `build/client_debug_agent_dev.exe`: compiled with localhost defaults
+  (`http://127.0.0.1:8080` and `dev-agent-token`).
+- `build/client_debug_agent_configured.exe`: compiled with the current `.env`
+  values for `RELAY_SERVER_URL`, `AGENT_ENROLLMENT_TOKEN`, and `AGENT_VERSION`.
+
+Runtime `.env.example`, `.env`, or real environment variables still override
+compiled defaults. When that happens, the client prints a console line such as
+`Config override: RELAY_SERVER_URL from .env overrides compiled default.`
+For production, prefer injecting override values through managed device
+configuration when possible. Code-sign the executable.
 
 The client finds Chrome in standard install paths or through `CHROME_PATH`,
 uses the first free port in `9222-9299`, and creates a temporary profile.
@@ -193,6 +200,6 @@ still inject final overrides.
 dart format --output=none --set-exit-if-changed .
 dart analyze
 dart test
-dart compile exe bin/client.dart -o build/client_debug_agent.exe
+powershell -ExecutionPolicy Bypass -File tool/build_clients.ps1
 docker compose config
 ```

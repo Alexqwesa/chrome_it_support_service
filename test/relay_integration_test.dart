@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:chrome_it_support_service/agent_protocol.dart';
-import 'package:chrome_it_support_service/relay_server.dart';
-import 'package:chrome_it_support_service/tunnel_frames.dart';
+import 'package:chrome_it_support_service/server/relay_server.dart';
+import 'package:chrome_it_support_service/shared/agent_protocol.dart';
+import 'package:chrome_it_support_service/shared/tunnel_frames.dart';
 import 'package:test/test.dart';
 
 void main() {

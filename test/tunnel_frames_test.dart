@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:chrome_it_support_service/port_allocator.dart';
-import 'package:chrome_it_support_service/tunnel_frames.dart';
+import 'package:chrome_it_support_service/shared/port_allocator.dart';
+import 'package:chrome_it_support_service/shared/tunnel_frames.dart';
 import 'package:test/test.dart';
 
 void main() {

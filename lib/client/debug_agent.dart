@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'agent_protocol.dart';
+import '../shared/agent_protocol.dart';
+import '../shared/tunnel_frames.dart';
 import 'chrome_launcher.dart';
-import 'tunnel_frames.dart';
 
 class DebugAgentConfig {
   DebugAgentConfig.fromEnvironment(Map<String, String> env)
@@ -20,7 +20,10 @@ class DebugAgentConfig {
 
   static String _required(Map<String, String> env, String key) {
     final value = env[key];
-    if (value == null || value.isEmpty || value == 'change-me') {
+    if (value == null ||
+        value.isEmpty ||
+        value == 'change-me' ||
+        value.startsWith('replace-with-')) {
       throw StateError('$key must be set to a non-default value.');
     }
     return value;

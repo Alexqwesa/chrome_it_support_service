@@ -1,9 +1,8 @@
-import 'dart:async';
 import 'dart:io';
 
-import 'package:chrome_it_support_service/env_loader.dart';
-import 'package:chrome_it_support_service/process_signals.dart';
-import 'package:chrome_it_support_service/relay_server.dart';
+import 'package:chrome_it_support_service/server/relay_server.dart';
+import 'package:chrome_it_support_service/shared/env_loader.dart';
+import 'package:chrome_it_support_service/shared/process_signals.dart';
 
 Future<void> main() async {
   try {

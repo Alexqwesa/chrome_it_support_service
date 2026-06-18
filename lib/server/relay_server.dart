@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'agent_protocol.dart';
+import '../shared/agent_protocol.dart';
+import '../shared/port_allocator.dart';
+import '../shared/tunnel_frames.dart';
 import 'html_page.dart';
-import 'port_allocator.dart';
 import 'session_registry.dart';
-import 'tunnel_frames.dart';
 
 class RelayServerConfig {
   RelayServerConfig.fromEnvironment(Map<String, String> env)
@@ -423,7 +423,7 @@ class _ServerTunnel {
   Future<void> close(String reason) async {
     if (_closed) return;
     _closed = true;
-    for (final socket in _streams.values) {
+    for (final socket in _streams.values.toList()) {
       socket.destroy();
     }
     _streams.clear();

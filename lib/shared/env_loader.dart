@@ -1,18 +1,53 @@
 import 'dart:io';
 
 Future<Map<String, String>> loadMergedEnvironment({
+  Map<String, String> defaults = const <String, String>{},
+  String defaultSource = 'compiled defaults',
   List<String> files = const <String>['.env.example', '.env'],
   Map<String, String>? processEnvironment,
 }) async {
-  final merged = <String, String>{};
+  return (await loadMergedEnvironmentWithSources(
+    defaults: defaults,
+    defaultSource: defaultSource,
+    files: files,
+    processEnvironment: processEnvironment,
+  ))
+      .values;
+}
+
+class LoadedEnvironment {
+  const LoadedEnvironment(this.values, this.sources);
+
+  final Map<String, String> values;
+  final Map<String, String> sources;
+}
+
+Future<LoadedEnvironment> loadMergedEnvironmentWithSources({
+  Map<String, String> defaults = const <String, String>{},
+  String defaultSource = 'compiled defaults',
+  List<String> files = const <String>['.env.example', '.env'],
+  Map<String, String>? processEnvironment,
+}) async {
+  final merged = <String, String>{...defaults};
+  final sources = <String, String>{
+    for (final key in defaults.keys) key: defaultSource,
+  };
   for (final path in files) {
     final file = File(path);
     if (await file.exists()) {
-      merged.addAll(_parseDotEnv(await file.readAsLines()));
+      final parsed = _parseDotEnv(await file.readAsLines());
+      merged.addAll(parsed);
+      for (final key in parsed.keys) {
+        sources[key] = path;
+      }
     }
   }
-  merged.addAll(processEnvironment ?? Platform.environment);
-  return merged;
+  final process = processEnvironment ?? Platform.environment;
+  merged.addAll(process);
+  for (final key in process.keys) {
+    sources[key] = 'process environment';
+  }
+  return LoadedEnvironment(merged, sources);
 }
 
 Map<String, String> _parseDotEnv(List<String> lines) {
