@@ -165,6 +165,15 @@ already has a Chrome window with remote debugging enabled, they can paste a
 loopback address such as `127.0.0.1:9223` into the agent console. The server
 will allocate another relay port and show a second row on `/debug-sessions`.
 
+Experimental native C++ client build:
+
+```powershell
+c_client\build.bat
+```
+
+This uses `c_client\CMakeLists.txt`, reads `.env`, and writes
+`build\client_debug_agent_cpp.exe` and `build\client_debug_agent_cpp_dev.exe`.
+
 ## Operator workflow
 
 1. Ask the user to run the client and keep its console open.
