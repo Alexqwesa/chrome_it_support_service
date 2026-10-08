@@ -1,4 +1,4 @@
-﻿# Chrome IT Support Service
+# Chrome IT Support Service
 
 Internal Chrome remote-debugging relay implemented in Dart. A Windows agent
 launches an isolated Chrome profile, connects outbound over WebSocket/WSS, and
