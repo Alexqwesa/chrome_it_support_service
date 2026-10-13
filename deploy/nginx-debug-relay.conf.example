@@ -40,6 +40,16 @@ server {
     }
 
     # Read-only connection list for the local network.
+    location = /help {
+        allow 10.0.0.0/8;
+        allow 172.16.0.0/12;
+        allow 192.168.0.0/16;
+        deny all;
+
+        proxy_pass http://127.0.0.1:9998/help;
+        proxy_set_header Host $host;
+    }
+
     location = /debug-sessions {
         allow 10.0.0.0/8;
         allow 172.16.0.0/12;
@@ -58,10 +68,11 @@ server {
 
         proxy_pass http://127.0.0.1:9998/api/sessions;
         proxy_set_header Host $host;
+        proxy_set_header Cookie $http_cookie;
     }
 
-    # Admin pages and mutation endpoints. Password checks are handled by the
-    # Dart server through ADMIN_PASSWORD, not by nginx.
+    # Admin pages and mutation endpoints. The Dart server handles AD sign-in
+    # or the local ADMIN_PASSWORD fallback; nginx only restricts networks.
     location /admin/ {
         allow 10.0.0.0/8;
         allow 172.16.0.0/12;
@@ -71,6 +82,7 @@ server {
         proxy_pass http://127.0.0.1:9998;
         proxy_set_header Authorization $http_authorization;
         proxy_set_header Host $host;
+        proxy_set_header Cookie $http_cookie;
     }
 
     location ~ ^/api/sessions/[^/]+/disconnect$ {
@@ -82,6 +94,8 @@ server {
         proxy_pass http://127.0.0.1:9998;
         proxy_set_header Authorization $http_authorization;
         proxy_set_header Host $host;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header X-CSRF-Token $http_x_csrf_token;
     }
 
     location = / {

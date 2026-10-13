@@ -1,0 +1,17 @@
+{
+  "name": "Tiếng Việt",
+  "title": "Hỗ trợ IT cho Chrome",
+  "purpose": "Công cụ này cho phép nhân viên IT kiểm tra trình duyệt Chrome trên máy của bạn khi hỗ trợ. Chỉ chạy khi bạn đã yêu cầu hỗ trợ.",
+  "steps": "Tải chương trình Windows bên dưới và chạy. Chương trình mở một cửa sổ Chrome riêng để hỗ trợ. Giữ cửa sổ dòng lệnh mở cho đến khi hoàn tất, sau đó đóng lại.",
+  "warning": "Kết nối cửa sổ Chrome hiện có có thể cho nhân viên hỗ trợ thấy các tab, hoạt động duyệt web và phiên đăng nhập. Chỉ chọn cách này khi bạn hiểu và đồng ý.",
+  "existing": "Nếu IT yêu cầu dùng cửa sổ Chrome đang mở, vào chrome://inspect/#remote-debugging trong cửa sổ đó. Sao chép địa chỉ 127.0.0.1:PORT, dán vào cửa sổ dòng lệnh của chương trình rồi nhấn Enter.",
+  "operator": "Nhân viên IT đăng nhập bằng tài khoản AD đã được duyệt, đăng ký khóa SSH công khai của riêng mình và dùng lệnh SSH trên trang phiên kết nối. Đóng đường hầm SSH khi hỗ trợ xong.",
+  "download": "Tải chương trình Windows",
+  "sessions": "Phiên kết nối",
+  "signIn": "Đăng nhập nhân viên IT",
+  "chromeHeading": "Chrome đang mở",
+  "operatorHeading": "Dành cho nhân viên IT",
+  "emailSubject": "Hướng dẫn hỗ trợ IT cho Chrome",
+  "emailIntro": "Bạn được mời bắt đầu phiên hỗ trợ IT cho Chrome. Đọc {{helpUrl}}, tải và chạy chương trình Windows: {{downloadUrl}}. Giữ cửa sổ dòng lệnh mở cho đến khi hỗ trợ xong.",
+  "emailExisting": "IT cũng yêu cầu kết nối Chrome đang mở. Trong Chrome đó, vào chrome://inspect/#remote-debugging và dán địa chỉ 127.0.0.1:PORT vào cửa sổ dòng lệnh của chương trình. Cảnh báo: thao tác này có thể cho thấy các tab và phiên đăng nhập."
+}

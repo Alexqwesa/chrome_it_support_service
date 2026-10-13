@@ -8,6 +8,7 @@ String renderSessionsPage(
   required int sshPort,
   required String clientDownloadUrl,
   required bool canDisconnect,
+  String? csrfToken,
 }) {
   final rows = sessions.expand((session) {
     final json = session.toJson(
@@ -67,7 +68,9 @@ String renderSessionsPage(
     User agent download:
     <a href="${_escape(clientDownloadUrl)}" download>client_debug_agent.exe</a>
     |
-    <a href="/admin/keys">SSH key admin</a>
+    <a href="/admin/keys">My SSH key / admin</a>
+    | <a href="/help">Help / Trợ giúp / Помощь</a>
+    | <a href="/admin/invite">Send invitation</a>
   </p>
   <table>
     <thead><tr><th>Status</th><th>PC name</th><th>User</th><th>Target</th><th>Server local port</th><th>Client Chrome</th><th>Connected at</th><th>Duration</th><th>Last heartbeat</th><th>Actions</th></tr></thead>
@@ -79,7 +82,7 @@ String renderSessionsPage(
     }
     async function disconnectSession(id) {
       if (!confirm('Disconnect this session?')) return;
-      const response = await fetch('/api/sessions/' + encodeURIComponent(id) + '/disconnect', {method: 'POST'});
+      const response = await fetch('/api/sessions/' + encodeURIComponent(id) + '/disconnect', {method: 'POST', headers: {'X-CSRF-Token': ${jsonEncode(csrfToken ?? '')}}});
       if (!response.ok) alert(await response.text());
       location.reload();
     }

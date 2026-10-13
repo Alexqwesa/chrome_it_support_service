@@ -5,5 +5,8 @@ coverage/
 *.log
 .idea/
 deploy/authorized_keys
+deploy/operator_state/
 deploy/ssh_host_keys/*
 !deploy/ssh_host_keys/.gitkeep
+/c_client/privateKey.key
+/c_client/certificate.crt

@@ -9,6 +9,11 @@ import '../shared/tunnel_frames.dart';
 import 'admin_keys_page.dart';
 import 'authorized_keys_manager.dart';
 import 'html_page.dart';
+import 'help_content.dart';
+import 'invitation_mailer.dart';
+import 'operator_auth.dart';
+import 'operator_store.dart';
+import 'operator_web.dart';
 import 'session_registry.dart';
 
 class RelayServerConfig {
@@ -21,6 +26,22 @@ class RelayServerConfig {
         agentToken = _required(env, 'AGENT_ENROLLMENT_TOKEN'),
         adminUsername = env['ADMIN_USERNAME'] ?? 'admin',
         adminPassword = _optionalSecret(env, 'ADMIN_PASSWORD'),
+        adHost = env['DOMAIN_HOSTNAME']?.trim() ?? '',
+        adDomain = env['DOMAIN_NAME']?.trim() ?? 'vietsov.com.vn',
+        adPort = _int(env, 'DOMAIN_PORT', 636),
+        ldapBindDn = env['LDAP_BIND_DN']?.trim() ?? '',
+        ldapBindPassword = env['LDAP_BIND_PASSWORD'] ?? '',
+        bootstrapAdminEmail = env['ADMIN_BOOTSTRAP_EMAIL']?.trim(),
+        stateDir = env['OPERATOR_STATE_DIR'] ?? 'deploy/operator_state',
+        helpLocalesDir = env['HELP_LOCALES_DIR'] ?? 'deploy/help_locales',
+        publicBaseUrl = env['PUBLIC_BASE_URL'] ?? 'https://softapp.vietsov.com.vn:9999',
+        smtpHost = env['SMTP_SERVER']?.trim() ?? '',
+        smtpPort = _int(env, 'SMTP_PORT', 25),
+        smtpFrom = env['SMTP_FROM']?.trim() ?? '',
+        smtpUser = env['SMTP_USER']?.trim(),
+        smtpPassword = env['SMTP_PASSWORD'],
+        smtpSsl = _bool(env, 'SMTP_SSL', false),
+        smtpRequireTls = _bool(env, 'SMTP_REQUIRE_TLS', true),
         authorizedKeysFile =
             env['AUTHORIZED_KEYS_FILE'] ?? 'deploy/authorized_keys',
         sshdReloadSignalFile = _optionalPath(env, 'SSHD_RELOAD_SIGNAL_FILE'),
@@ -46,6 +67,23 @@ class RelayServerConfig {
   final String agentToken;
   final String adminUsername;
   final String? adminPassword;
+  final String adHost;
+  final String adDomain;
+  final int adPort;
+  final String ldapBindDn;
+  final String ldapBindPassword;
+  final String? bootstrapAdminEmail;
+  final String stateDir;
+  final String helpLocalesDir;
+  final String publicBaseUrl;
+  final String smtpHost;
+  final int smtpPort;
+  final String smtpFrom;
+  final String? smtpUser;
+  final String? smtpPassword;
+  final bool smtpSsl;
+  final bool smtpRequireTls;
+  bool get adConfigured => adHost.isNotEmpty;
   final String authorizedKeysFile;
   final String? sshdReloadSignalFile;
   final bool sessionListRequiresAuth;
@@ -94,11 +132,16 @@ class RelayServerConfig {
 class RelayServer {
   RelayServer(this.config)
       : _allocator = PortAllocator(config.portStart, config.portEnd),
-        _keysManager = AuthorizedKeysManager(config.authorizedKeysFile);
+        _keysManager = AuthorizedKeysManager(config.authorizedKeysFile),
+        _operators = OperatorStore(config.stateDir),
+        _help = HelpContent(config.helpLocalesDir);
 
   final RelayServerConfig config;
   final PortAllocator _allocator;
   final AuthorizedKeysManager _keysManager;
+  final OperatorStore _operators;
+  final HelpContent _help;
+  late final OperatorWeb _operatorWeb;
   final SessionRegistry _registry = SessionRegistry();
   final Map<String, _ServerTunnel> _tunnels = <String, _ServerTunnel>{};
   HttpServer? _httpServer;
@@ -108,6 +151,50 @@ class RelayServer {
   int? get boundHttpPort => _httpServer?.port;
 
   Future<void> start() async {
+    if (config.smtpHost.isNotEmpty || config.smtpFrom.isNotEmpty) {
+      final publicUri = Uri.tryParse(config.publicBaseUrl);
+      if (publicUri == null || publicUri.scheme != 'https' || publicUri.host.isEmpty) {
+        throw StateError('PUBLIC_BASE_URL must be an absolute HTTPS URL when SMTP is configured.');
+      }
+    }
+    if (config.adConfigured &&
+        (config.ldapBindDn.isEmpty || config.ldapBindPassword.isEmpty)) {
+      throw StateError('LDAP_BIND_DN and LDAP_BIND_PASSWORD are required when DOMAIN_HOSTNAME is set.');
+    }
+    await _operators.initialize(config.adConfigured ? config.bootstrapAdminEmail : null);
+    if (config.adConfigured && !_operators.users.any((user) => !user.isDeleted && user.canManageAdmin)) {
+      throw StateError('No active AD administrator. Configure ADMIN_BOOTSTRAP_EMAIL before first startup.');
+    }
+    await _help.load();
+    _operatorWeb = OperatorWeb(
+      store: _operators,
+      help: _help,
+      mailer: InvitationMailer(
+        host: config.smtpHost,
+        port: config.smtpPort,
+        from: config.smtpFrom,
+        user: config.smtpUser,
+        password: config.smtpPassword,
+        ssl: config.smtpSsl,
+        allowStartTls: config.smtpRequireTls,
+      ),
+      auth: config.adConfigured
+          ? OperatorAuth(
+              store: _operators,
+              domain: config.adDomain,
+              host: config.adHost,
+              port: config.adPort,
+              bindDn: config.ldapBindDn,
+              bindPassword: config.ldapBindPassword,
+              secureCookie: Uri.parse(config.publicBaseUrl).scheme == 'https',
+            )
+          : null,
+      adminUsername: config.adminUsername,
+      adminPassword: config.adminPassword,
+      publicBaseUrl: config.publicBaseUrl,
+      downloadUrl: config.clientDownloadUrl,
+      reloadSshd: config.sshdReloadSignalFile == null ? null : _signalSshdReload,
+    );
     _httpServer = await HttpServer.bind(config.httpBind, config.httpPort);
     _httpServer!.listen(_handleRequest);
     _sweepTimer = Timer.periodic(const Duration(seconds: 15), (_) {
@@ -130,11 +217,12 @@ class RelayServer {
   Future<void> _handleRequest(HttpRequest request) async {
     try {
       if (request.uri.path == '/health' && request.method == 'GET') {
-        return _text(request, HttpStatus.ok, 'ok');
+        return await _text(request, HttpStatus.ok, 'ok');
       }
       if (request.uri.path == '/agent') {
-        return _acceptAgent(request);
+        return await _acceptAgent(request);
       }
+      if (await _operatorWeb.handle(request)) return;
       if (request.uri.path == '/debug-sessions' && request.method == 'GET') {
         if (config.sessionListRequiresAuth && !await _requireAdmin(request)) {
           return;
@@ -146,16 +234,19 @@ class RelayServer {
             sshHost: config.sshRelayHost,
             sshPort: config.sshRelayPort,
             clientDownloadUrl: config.clientDownloadUrl,
-            canDisconnect: config.adminPassword != null,
+            canDisconnect: _operatorWeb.principal(request) != null &&
+                _operatorWeb.canManageOperator(_operatorWeb.principal(request)!),
+            csrfToken: _operatorWeb.principal(request) != null
+                ? _operatorWeb.csrfToken(request) : null,
           ),
         );
-        return request.response.close();
+        return await request.response.close();
       }
       if (request.uri.path == '/api/sessions' && request.method == 'GET') {
         if (config.sessionListRequiresAuth && !await _requireAdmin(request)) {
           return;
         }
-        return _json(
+        return await _json(
           request,
           HttpStatus.ok,
           _registry.sessions
@@ -170,17 +261,18 @@ class RelayServer {
       }
       if (request.uri.path == '/admin/keys' && request.method == 'GET') {
         if (!await _requireAdmin(request)) return;
-        return _renderKeysAdmin(request);
+        return await _renderKeysAdmin(request);
       }
       if (request.uri.path == '/admin/keys/add' && request.method == 'POST') {
         if (!await _requireAdmin(request)) return;
         try {
           final form = await _readForm(request);
           await _keysManager.add(form['key'] ?? '');
-          return _redirect(request, '/admin/keys?message=Key%20added.');
+          await _operators.journal('local-admin', 'legacy_key_added');
+          return await _redirect(request, '/admin/keys?message=Key%20added.');
         } on Object catch (error, stackTrace) {
           _logAdminError(request, error, stackTrace);
-          return _renderKeysAdmin(request, error: '$error');
+          return await _renderKeysAdmin(request, error: '$error');
         }
       }
       final keyActionMatch =
@@ -202,37 +294,48 @@ class RelayServer {
             case 'enable':
               await _keysManager.enable(index);
           }
+          await _operators.journal('local-admin', 'legacy_key_$action',
+              subject: 'line:$index');
         } on Object catch (error, stackTrace) {
           _logAdminError(request, error, stackTrace);
-          return _renderKeysAdmin(request, error: '$error');
+          return await _renderKeysAdmin(request, error: '$error');
         }
-        return _redirect(request, '/admin/keys?message=Key%20updated.');
+        return await _redirect(request, '/admin/keys?message=Key%20updated.');
       }
       if (request.uri.path == '/admin/ssh/reload' && request.method == 'POST') {
         if (!await _requireAdmin(request)) return;
         try {
           await _signalSshdReload();
-          return _redirect(
+          await _operators.journal('local-admin', 'sshd_reload_requested');
+          return await _redirect(
             request,
             '/admin/keys?message=sshd%20reload%20requested.',
           );
         } on Object catch (error, stackTrace) {
           _logAdminError(request, error, stackTrace);
-          return _renderKeysAdmin(request, error: '$error');
+          return await _renderKeysAdmin(request, error: '$error');
         }
       }
       final match = RegExp(r'^/api/sessions/([^/]+)/disconnect$')
           .firstMatch(request.uri.path);
       if (match != null && request.method == 'POST') {
         if (!await _requireAdmin(request)) return;
+        if (config.adConfigured &&
+            !_operatorWeb.canManageOperator(_operatorWeb.principal(request)!)) {
+          return await _text(request, HttpStatus.forbidden, 'Operator permission required.');
+        }
+        if (config.adConfigured && !_operatorWeb.checkApiCsrf(request)) {
+          return await _text(request, HttpStatus.forbidden, 'Invalid form token.');
+        }
         final id = Uri.decodeComponent(match.group(1)!);
         if (_registry[id] == null) {
-          return _text(request, HttpStatus.notFound, 'Session not found.');
+          return await _text(request, HttpStatus.notFound, 'Session not found.');
         }
         await disconnect(id, reason: 'disconnected by administrator');
-        return _json(request, HttpStatus.ok, <String, Object?>{'ok': true});
+        await _operators.journal(_operatorWeb.principal(request)!, 'session_disconnected', subject: id);
+        return await _json(request, HttpStatus.ok, <String, Object?>{'ok': true});
       }
-      return _text(request, HttpStatus.notFound, 'Not found.');
+      return await _text(request, HttpStatus.notFound, 'Not found.');
     } catch (error, stackTrace) {
       stderr.writeln('Request failed: $error\n$stackTrace');
       try {
@@ -467,6 +570,7 @@ class RelayServer {
   }
 
   bool _isAdmin(HttpRequest request) {
+    if (config.adConfigured) return _operatorWeb.principal(request) != null;
     final password = config.adminPassword;
     if (password == null) return false;
     final header = request.headers.value(HttpHeaders.authorizationHeader);
@@ -481,6 +585,10 @@ class RelayServer {
 
   Future<bool> _requireAdmin(HttpRequest request) async {
     if (_isAdmin(request)) return true;
+    if (config.adConfigured) {
+      await _text(request, HttpStatus.unauthorized, 'AD sign-in required.');
+      return false;
+    }
     if (config.adminPassword == null) {
       await _text(
         request,

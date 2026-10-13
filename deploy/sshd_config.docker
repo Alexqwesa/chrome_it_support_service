@@ -13,7 +13,7 @@ PermitRootLogin no
 AuthenticationMethods publickey
 
 AllowUsers debug-tunnel
-AuthorizedKeysFile /data/authorized_keys
+AuthorizedKeysFile /data/authorized_keys /var/lib/debug-relay/operator_keys
 StrictModes no
 
 AllowTcpForwarding local

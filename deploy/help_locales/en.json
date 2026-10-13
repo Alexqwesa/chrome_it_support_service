@@ -1,0 +1,17 @@
+{
+  "name": "English",
+  "title": "Chrome IT support",
+  "purpose": "This tool lets IT support inspect a Chrome browser on your PC while you are assisting them. Start it only when you requested support.",
+  "steps": "Download the Windows agent below and run it. It opens a separate Chrome window for support. Leave the console window open until support is finished, then close it.",
+  "warning": "An existing Chrome window may expose open tabs, browsing activity and signed-in sessions to the support operator. Use that option only if you understand and agree.",
+  "existing": "If IT asks to use an existing Chrome window, open chrome://inspect/#remote-debugging in that window. Copy its 127.0.0.1:PORT address and paste it into the agent console, then press Enter.",
+  "operator": "IT operators sign in with their approved AD account, register their own SSH public key, and use the SSH command on the sessions page. Close the tunnel when support ends.",
+  "download": "Download Windows agent",
+  "sessions": "Sessions",
+  "signIn": "Operator sign-in",
+  "chromeHeading": "Existing Chrome",
+  "operatorHeading": "For IT operators",
+  "emailSubject": "Chrome IT support instructions",
+  "emailIntro": "You have been invited to start a Chrome IT support session. Read {{helpUrl}}, then download and run the Windows agent: {{downloadUrl}}. Leave its console open until support is finished.",
+  "emailExisting": "IT also asks you to connect your existing Chrome. Open chrome://inspect/#remote-debugging there and paste its 127.0.0.1:PORT into the agent console. Warning: this may expose open tabs and signed-in sessions."
+}

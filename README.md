@@ -5,6 +5,46 @@ launches an isolated Chrome profile, connects outbound over WebSocket/WSS, and
 receives a server-local relay port. IT operators reach that port only through a
 restricted SSH local-forward.
 
+## Help, invitations, and operator accounts
+
+The user-facing `/help` page offers Vietnamese, Russian, and English. Its text
+and the email templates live in `deploy/help_locales/{vi,ru,en}.json`; add a
+new locale JSON file there to include it in the page selector and emails.
+The help page links to the Windows EXE and explains both the default separate
+Chrome window and the optional existing-Chrome steps. The latter exposes the
+user's open tabs and signed-in sessions to the support operator.
+
+To use individual operator accounts, set `DOMAIN_HOSTNAME`, `DOMAIN_NAME`,
+`DOMAIN_PORT`, `LDAP_BIND_DN`, `LDAP_BIND_PASSWORD`, and
+`ADMIN_BOOTSTRAP_EMAIL` in `.env` before the first start. The relay looks up
+the approved email over LDAPS and checks the password by binding as that user.
+`ADMIN_BOOTSTRAP_EMAIL` creates the first administrator only when the operator
+database has never existed. Subsequent accounts and permissions are managed at
+`/admin/operators`. The first administrator has both permissions. New accounts
+have neither `canManageAdmin` nor `canManageOperator` by default.
+
+Approved operators manage only their own SSH public key at `/admin/keys` and
+see their own key edit history. `canManageOperator` permits sending invitations
+at `/admin/invite` and viewing the invitation journal at `/admin/journal`.
+`canManageAdmin` permits changing approved accounts and viewing the complete
+journal. Existing `deploy/authorized_keys` entries stay active as unmanaged
+legacy entries. Managed keys are written separately to the `operator_state`
+Docker volume, which is also mounted read-only in the SSH sidecar.
+
+Configure `SMTP_SERVER`, `SMTP_FROM`, and, where required, `SMTP_USER` and
+`SMTP_PASSWORD` to enable invitations. `PUBLIC_BASE_URL` must be the public
+HTTPS origin. The email contains all three languages, a link to `/help`, and
+the download link. The existing-Chrome checkbox adds instructions and a
+warning, but does not change how the EXE starts. Send attempts, successes, and
+failures include the AD sender, recipient, checkbox value, and UTC time in the
+persistent journal. SMTP certificate validation is enabled; `SMTP_REQUIRE_TLS`
+defaults to `true`.
+
+If `DOMAIN_HOSTNAME` is unset, the existing `ADMIN_PASSWORD` Basic login remains
+available. When AD is configured, the shared password is ignored even if AD
+is unreachable. Operator state persists in the `operator_state` named volume;
+do not remove that volume during ordinary upgrades.
+
 ## Security model
 
 - Client Chrome debug endpoints bind only to `127.0.0.1`.
@@ -13,8 +53,8 @@ restricted SSH local-forward.
 - Docker publishes relay tunnel ports only on host loopback.
 - Agents authenticate with a revocable enrollment token.
 - The status page and `GET /api/sessions` are read-only and public by default.
-- SSH key admin and disconnect/admin actions require Basic authentication when
-  `ADMIN_PASSWORD` is configured.
+- Admin actions require an approved AD sign-in when AD is configured. Basic
+  authentication is available only when AD is not configured.
 - Heartbeat and maximum-session timeouts remove stale sessions.
 - SSH examples allow only local forwarding to the relay range and no shell.
 
@@ -24,8 +64,8 @@ secret, rotate it when exposed, and do not use it as an admin credential.
 ## Server deployment
 
 1. Copy the environment example and edit the production section at the top of
-   `.env`. At minimum, replace `AGENT_ENROLLMENT_TOKEN`. Set `ADMIN_PASSWORD`
-   to enable the `/admin/keys` page for managing operator SSH keys:
+   `.env`. At minimum, replace `AGENT_ENROLLMENT_TOKEN`. Configure AD for
+   individual operator accounts, or set `ADMIN_PASSWORD` for local fallback:
 
    ```bash
    cp .env.example .env
@@ -51,7 +91,7 @@ secret, rotate it when exposed, and do not use it as an admin credential.
    `deploy/nginx-debug-relay.conf.example`. It exposes the read-only session
    list and client exe download to configured internal networks, and protects
    admin pages and mutation endpoints to the Dart server, which performs its
-   own Basic-auth checks from `ADMIN_USERNAME` and `ADMIN_PASSWORD`:
+   own AD session or local fallback authentication:
 
    ```bash
    sudo nginx -t
@@ -65,7 +105,7 @@ secret, rotate it when exposed, and do not use it as an admin credential.
 
 4. Adjust the nginx `allow` networks before deployment. `/agent` must remain
    reachable by supported user PCs, while `/debug-sessions`,
-   `/download/client_debug_agent.exe`, and `GET /api/sessions` should be
+   `/help`, `/download/client_debug_agent.exe`, and `GET /api/sessions` should be
    limited to the local network or IT VPN.
 
 The service binds tunnel ports to `0.0.0.0` **inside the container** so Docker
@@ -83,12 +123,12 @@ Windows `debug-tunnel` user are required.
 Generate one keypair per operator on the operator PC:
 
 ```powershell
-ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\vsp_debug_tunnel_ed25519" -C "vsp-debug-tunnel-$env:USERNAME"
-Get-Content "$env:USERPROFILE\.ssh\vsp_debug_tunnel_ed25519.pub"
+$k="$env:USERPROFILE\.ssh\id_ed25519"; $p="$k.pub"; if((Test-Path $k) -xor (Test-Path $p)){ throw "Only one key file exists. Fix the pair first." }; if(!(Test-Path $k)){ New-Item -ItemType Directory -Force -Path (Split-Path $k) | Out-Null; ssh-keygen -t ed25519 -f $k }; Get-Content $p
 ```
 
-Create the mounted authorized keys file and add each operator public key. Only
-paste `.pub` content; never copy or share private keys:
+In AD mode, each approved operator pastes only their own `.pub` content into
+`/admin/keys`. Never copy or share private keys. For legacy entries or local
+fallback mode, create the mounted authorized keys file manually:
 
 ```bash
 cp deploy/authorized_keys.example deploy/authorized_keys
@@ -97,19 +137,17 @@ docker compose up -d --build ssh-relay
 ```
 
 `docker-compose.yml` mounts the `deploy` directory, not the individual
-`authorized_keys` file. This lets the admin page create
-`deploy/authorized_keys` if it does not exist yet, and avoids Docker creating a
-directory at the file path when the file is missing.
+`authorized_keys` file. This allows creating the legacy file after deployment.
+AD-managed keys live in the separate `operator_state` volume.
 
 SSH server host keys are stored in the Docker volume `ssh_host_keys`. Do not
 copy `deploy/ssh_host_keys` to production; host private keys need Linux file
 permissions such as `0600`, and bind mounts from some hosts can expose them as
 too open for OpenSSH.
 
-After `ADMIN_PASSWORD` is configured, open
-`https://softapp.vietsov.com.vn:9999/admin/keys` to add, edit, disable, or
-delete keys through the server admin page. The main `/debug-sessions` page links
-to this admin page, but the password prompt is enforced only by the Dart server.
+Open `https://softapp.vietsov.com.vn:9999/admin/keys` to manage your own key.
+The main `/debug-sessions` page links to this page. In AD mode, admins can
+request a reload from `/admin/operators`.
 The reload button signals the Docker ssh-relay sidecar through a shared marker
 file in the mounted `deploy` directory. New `authorized_keys` entries are
 normally read by OpenSSH without a reload, but the button is available when you

@@ -14,6 +14,8 @@ COPY --from=build /runtime/lib/ /lib/
 COPY --from=build /runtime/lib64/ /lib64/
 COPY --from=build /runtime/usr/ /usr/
 COPY --from=build /app/debug_relay_server /usr/local/bin/debug_relay_server
+COPY deploy/help_locales /etc/debug-relay/help_locales
+RUN mkdir -p /var/lib/debug-relay && touch /var/lib/debug-relay/.initialized && chown -R 10001:10001 /var/lib/debug-relay
 USER relay
 EXPOSE 9998 41000-41049
 ENTRYPOINT ["/usr/local/bin/debug_relay_server"]
