@@ -47,6 +47,7 @@ class LdapCredentialValidator {
     required this.bindDn,
     required this.bindPassword,
     required this.timeout,
+    this.acceptBadCertificate = false,
   });
 
   final String domain;
@@ -55,10 +56,20 @@ class LdapCredentialValidator {
   final String bindDn;
   final String bindPassword;
   final Duration timeout;
+  final bool acceptBadCertificate;
+
+  LdapConnection _connection() => LdapConnection(
+        host: host,
+        port: port,
+        ssl: true,
+        badCertificateHandler: acceptBadCertificate
+            ? (_) => true
+            : LdapConnection.defaultBadCertHandler,
+      );
 
   Future<bool> validate(String email, String password, String traceId) async {
     if (password.isEmpty) return false;
-    final search = LdapConnection(host: host, port: port, ssl: true);
+    final search = _connection();
     try {
       await _stage(traceId, 'search connection', search.open);
       final bind = await _stage(traceId, 'search account bind',
@@ -84,7 +95,7 @@ class LdapCredentialValidator {
       if (match == null || ldapAttribute(match, 'sAMAccountName') == null) {
         return false;
       }
-      final user = LdapConnection(host: host, port: port, ssl: true);
+      final user = _connection();
       try {
         await _stage(traceId, 'user connection', user.open);
         final verified = await _stage(traceId, 'user password bind',

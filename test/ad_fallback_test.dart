@@ -5,6 +5,18 @@ import 'package:chrome_it_support_service/server/relay_server.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('bad LDAP certificates require explicit opt-in', () {
+    final defaults = RelayServerConfig.fromEnvironment({
+      'AGENT_ENROLLMENT_TOKEN': 'test-token',
+    });
+    final enabled = RelayServerConfig.fromEnvironment({
+      'AGENT_ENROLLMENT_TOKEN': 'test-token',
+      'LDAP_ACCEPT_BAD_CERTIFICATE': 'true',
+    });
+    expect(defaults.ldapAcceptBadCertificate, isFalse);
+    expect(enabled.ldapAcceptBadCertificate, isTrue);
+  });
+
   test('AD timeout uses configured seconds', () {
     final config = RelayServerConfig.fromEnvironment({
       'AGENT_ENROLLMENT_TOKEN': 'test-token',

@@ -14,6 +14,7 @@ class OperatorAuth {
     required this.bindPassword,
     required this.secureCookie,
     this.timeout = const Duration(seconds: 8),
+    this.acceptBadCertificate = false,
   });
 
   final OperatorStore store;
@@ -24,6 +25,7 @@ class OperatorAuth {
   final String bindPassword;
   final bool secureCookie;
   final Duration timeout;
+  final bool acceptBadCertificate;
   final Map<String, _LoginSession> _sessions = {};
   final Map<String, List<DateTime>> _failures = {};
   final Random _random = Random.secure();
@@ -91,6 +93,7 @@ class OperatorAuth {
         bindDn: bindDn,
         bindPassword: bindPassword,
         timeout: timeout,
+        acceptBadCertificate: acceptBadCertificate,
       ).validate(email, password, traceId);
       if (!verified) return _reject(email);
       final id = _token();

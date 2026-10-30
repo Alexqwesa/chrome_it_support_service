@@ -33,6 +33,7 @@ class RelayServerConfig {
         ldapBindDn = env['LDAP_BIND_DN']?.trim() ?? '',
         ldapBindPassword = env['LDAP_BIND_PASSWORD'] ?? '',
         ldapCaCertFile = _optionalPath(env, 'LDAP_CA_CERT_FILE'),
+        ldapAcceptBadCertificate = _bool(env, 'LDAP_ACCEPT_BAD_CERTIFICATE', false),
         bootstrapAdminEmail = env['ADMIN_BOOTSTRAP_EMAIL']?.trim(),
         stateDir = env['OPERATOR_STATE_DIR'] ?? 'deploy/operator_state',
         helpLocalesDir = env['HELP_LOCALES_DIR'] ?? 'deploy/help_locales',
@@ -77,6 +78,7 @@ class RelayServerConfig {
   final String ldapBindDn;
   final String ldapBindPassword;
   final String? ldapCaCertFile;
+  final bool ldapAcceptBadCertificate;
   final String? bootstrapAdminEmail;
   final String stateDir;
   final String helpLocalesDir;
@@ -183,6 +185,9 @@ class RelayServer {
       }
       stdout.writeln('LDAPS CA certificates loaded from $path.');
     }
+    if (config.adConfigured && config.ldapAcceptBadCertificate) {
+      stderr.writeln('WARNING: LDAP_ACCEPT_BAD_CERTIFICATE is enabled. Invalid LDAPS certificates are accepted; credentials may be exposed to an attacker.');
+    }
     await _operators
         .initialize(config.adConfigured ? config.bootstrapAdminEmail : null);
     if (config.adConfigured &&
@@ -211,6 +216,7 @@ class RelayServer {
               host: config.adHost,
               port: config.adPort,
               timeout: config.adTimeout,
+              acceptBadCertificate: config.ldapAcceptBadCertificate,
               bindDn: config.ldapBindDn,
               bindPassword: config.ldapBindPassword,
               secureCookie: Uri.parse(config.publicBaseUrl).scheme == 'https',

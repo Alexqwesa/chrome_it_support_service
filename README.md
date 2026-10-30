@@ -29,6 +29,11 @@ and user password bind. A timeout message names the stage that stalled.
 `AD_TIMEOUT_SECONDS` sets the per-stage limit (default 8 seconds). Logs
 never include passwords or the search account DN.
 
+For temporary SimOps compatibility, `LDAP_ACCEPT_BAD_CERTIFICATE=true`
+accepts invalid LDAPS certificates. This disables server identity verification,
+including hostname and issuer checks; an attacker could capture LDAP passwords.
+The default is false. Replace the LDAP server certificate and restore verification.
+
 
 Approved operators manage only their own SSH public key at `/admin/keys` and
 see their own key edit history. `canManageOperator` permits sending invitations
