@@ -29,6 +29,7 @@ class RelayServerConfig {
         adHost = env['DOMAIN_HOSTNAME']?.trim() ?? '',
         adDomain = env['DOMAIN_NAME']?.trim() ?? 'vietsov.com.vn',
         adPort = _int(env, 'DOMAIN_PORT', 636),
+        adTimeout = Duration(seconds: _int(env, 'AD_TIMEOUT_SECONDS', 8)),
         ldapBindDn = env['LDAP_BIND_DN']?.trim() ?? '',
         ldapBindPassword = env['LDAP_BIND_PASSWORD'] ?? '',
         bootstrapAdminEmail = env['ADMIN_BOOTSTRAP_EMAIL']?.trim(),
@@ -70,6 +71,7 @@ class RelayServerConfig {
   final String adHost;
   final String adDomain;
   final int adPort;
+  final Duration adTimeout;
   final String ldapBindDn;
   final String ldapBindPassword;
   final String? bootstrapAdminEmail;
@@ -184,6 +186,7 @@ class RelayServer {
               domain: config.adDomain,
               host: config.adHost,
               port: config.adPort,
+              timeout: config.adTimeout,
               bindDn: config.ldapBindDn,
               bindPassword: config.ldapBindPassword,
               secureCookie: Uri.parse(config.publicBaseUrl).scheme == 'https',

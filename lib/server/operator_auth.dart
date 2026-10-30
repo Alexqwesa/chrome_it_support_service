@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -14,6 +15,7 @@ class OperatorAuth {
     required this.bindDn,
     required this.bindPassword,
     required this.secureCookie,
+    this.timeout = const Duration(seconds: 8),
   });
 
   final OperatorStore store;
@@ -23,6 +25,7 @@ class OperatorAuth {
   final String bindDn;
   final String bindPassword;
   final bool secureCookie;
+  final Duration timeout;
   final Map<String, _LoginSession> _sessions = {};
   final Map<String, List<DateTime>> _failures = {};
   final Random _random = Random.secure();
@@ -66,42 +69,64 @@ class OperatorAuth {
 
   Future<bool> signIn(HttpRequest request, String email, String password) async {
     email = email.trim().toLowerCase();
+    final traceId = _token().substring(0, 8);
     if (store.get(email) == null || password.isEmpty ||
         !email.endsWith('@$domain')) {
+      stdout.writeln('AD login [$traceId] rejected before LDAP: account not approved, invalid domain, or empty password.');
       return false;
     }
     final recentFailures = _failures[email] ??= [];
     recentFailures.removeWhere((at) =>
         DateTime.now().difference(at) > const Duration(minutes: 5));
-    if (recentFailures.length >= 10) return false;
+    if (recentFailures.length >= 10) {
+      stdout.writeln('AD login [$traceId] rejected: too many recent failures for $email.');
+      return false;
+    }
+    stdout.writeln(
+        'AD login [$traceId] starting for $email via LDAPS $host:$port '
+        '(timeout ${timeout.inSeconds}s per stage).');
     final search = LdapConnection(host: host, port: port, ssl: true);
     try {
-      await search.open().timeout(const Duration(seconds: 8));
-      final bind = await search.bind(dn: DN(bindDn), password: bindPassword)
-          .timeout(const Duration(seconds: 8));
-      if (bind.resultCode != ResultCode.OK) return _reject(email);
+      await _stage(traceId, 'search connection', search.open);
+      final bind = await _stage(traceId, 'search account bind',
+          () => search.bind(dn: DN(bindDn), password: bindPassword));
+      if (bind.resultCode != ResultCode.OK) {
+        stderr.writeln('AD login [$traceId] search account bind refused: ${bind.resultCode}.');
+        return _reject(email);
+      }
       final base = DN(domain.split('.').map((part) => 'DC=$part').join(','));
-      final result = await search.search(base, Filter.equals('mail', email),
-          ['mail', 'userAccountControl'], sizeLimit: 2);
+      final result = await _stage(traceId, 'directory search', () =>
+          search.search(base, Filter.equals('mail', email),
+              ['mail', 'userAccountControl'], sizeLimit: 2));
+      final entries = await _stage(traceId, 'directory results',
+          () => result.stream.toList());
       final matches = <SearchEntry>[];
-      await for (final entry in result.stream.timeout(const Duration(seconds: 8))) {
+      for (final entry in entries) {
         if (!entry.hasReferrals && entry.dn.toString().trim().isNotEmpty &&
             _attribute(entry, 'mail')?.toLowerCase() == email) {
           matches.add(entry);
         }
       }
+      stdout.writeln('AD login [$traceId] directory returned ${entries.length} '
+          'entries, ${matches.length} exact email matches.');
       if (matches.length != 1) {
         return _reject(email);
       }
       final disabled = int.tryParse(
               _attribute(matches.single, 'userAccountControl') ?? '') ?? 0;
-      if (disabled & 2 != 0) return _reject(email);
+      if (disabled & 2 != 0) {
+        stderr.writeln('AD login [$traceId] account is disabled in AD.');
+        return _reject(email);
+      }
       final user = LdapConnection(host: host, port: port, ssl: true);
       try {
-        await user.open().timeout(const Duration(seconds: 8));
-        final verified = await user.bind(dn: matches.single.dn, password: password)
-            .timeout(const Duration(seconds: 8));
-        if (verified.resultCode != ResultCode.OK) return _reject(email);
+        await _stage(traceId, 'user connection', user.open);
+        final verified = await _stage(traceId, 'user password bind',
+            () => user.bind(dn: matches.single.dn, password: password));
+        if (verified.resultCode != ResultCode.OK) {
+          stderr.writeln('AD login [$traceId] user password bind refused: ${verified.resultCode}.');
+          return _reject(email);
+        }
       } finally {
         if (user.isReady || user.isBound) await user.close();
       }
@@ -115,12 +140,31 @@ class OperatorAuth {
         ..sameSite = SameSite.strict
         ..path = '/'
         ..maxAge = 8 * 60 * 60);
+      stdout.writeln('AD login [$traceId] succeeded for $email.');
       return true;
     } catch (error) {
-      stderr.writeln('AD login failed for $email: $error');
+      stderr.writeln('AD login [$traceId] failed for $email: $error');
       return _reject(email);
     } finally {
       if (search.isReady || search.isBound) await search.close();
+    }
+  }
+
+  Future<T> _stage<T>(String traceId, String name, Future<T> Function() action) async {
+    final timer = Stopwatch()..start();
+    stdout.writeln('AD login [$traceId] $name started.');
+    try {
+      final value = await action().timeout(timeout);
+      stdout.writeln('AD login [$traceId] $name completed in ${timer.elapsedMilliseconds} ms.');
+      return value;
+    } on TimeoutException {
+      stderr.writeln('AD login [$traceId] $name timed out after ${timer.elapsedMilliseconds} ms '
+          '(limit ${timeout.inSeconds}s).');
+      rethrow;
+    } catch (error) {
+      stderr.writeln('AD login [$traceId] $name failed after ${timer.elapsedMilliseconds} ms: '
+          '${error.runtimeType}: $error');
+      rethrow;
     }
   }
 

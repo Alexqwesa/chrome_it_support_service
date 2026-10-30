@@ -5,6 +5,14 @@ import 'package:chrome_it_support_service/server/relay_server.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('AD timeout uses configured seconds', () {
+    final config = RelayServerConfig.fromEnvironment({
+      'AGENT_ENROLLMENT_TOKEN': 'test-token',
+      'AD_TIMEOUT_SECONDS': '20',
+    });
+    expect(config.adTimeout, const Duration(seconds: 20));
+  });
+
   test('shared password cannot reach legacy key mutation in AD mode', () async {
     final dir = await Directory.systemTemp.createTemp('relay-ad-');
     addTearDown(() => dir.delete(recursive: true));

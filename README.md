@@ -23,6 +23,12 @@ database has never existed. Subsequent accounts and permissions are managed at
 `/admin/operators`. The first administrator has both permissions. New accounts
 have neither `canManageAdmin` nor `canManageOperator` by default.
 
+AD login logs a short trace ID, LDAPS host and port, and timing for search
+connection, search account bind, directory search/results, user connection,
+and user password bind. A timeout message names the stage that stalled.
+`AD_TIMEOUT_SECONDS` sets the per-stage limit (default 8 seconds). Logs
+never include passwords or the search account DN.
+
 Approved operators manage only their own SSH public key at `/admin/keys` and
 see their own key edit history. `canManageOperator` permits sending invitations
 at `/admin/invite` and viewing the invitation journal at `/admin/journal`.
@@ -98,6 +104,19 @@ secret, rotate it when exposed, and do not use it as an admin credential.
    sudo systemctl reload nginx
    ```
 
+   For the Windows nginx installation, run these commands **on the nginx
+   server**, from its local nginx installation directory after updating
+   `conf/conf.d/nginx-debug-relay.conf`:
+
+   ```powershell
+   .\nginx.exe -t
+   .\nginx.exe -s reload
+   ```
+
+   Editing a mapped drive alone does not reload nginx on the server. The
+   active config must include `location = /help` or nginx's `location /`
+   returns 404.
+
    The example listens on HTTPS port `9999` and proxies to the Dart relay
    backend on `127.0.0.1:9998`. This avoids a port conflict when nginx and the
    Dart relay run on the same host.
@@ -114,6 +133,16 @@ can publish them. `docker-compose.yml` publishes tunnel ports only to host
 HTTP port is published on
 `${SERVER_HTTP_PUBLISH_BIND:-127.0.0.1}:${SERVER_HTTP_PUBLISH_PORT:-9998}`;
 keep it loopback-only when nginx is the public frontend.
+
+When pulling a newer image, also update the production `docker-compose.yml`.
+The `debug-relay` service must set `OPERATOR_STATE_DIR=/var/lib/debug-relay`
+and `HELP_LOCALES_DIR=/etc/debug-relay/help_locales`, and mount the
+`operator_state` volume at `/var/lib/debug-relay`. The `ssh-relay` service
+mounts the same volume read-only. An older Compose file leaves the state path
+at `deploy/operator_state`, which fails on the read-only container filesystem.
+Use `docker compose config` to inspect the resolved settings, then
+`docker compose up -d`. Do not use `down -v` for this upgrade; that removes
+persistent SSH host keys and operator state.
 
 ## Restricted SSH setup
 
