@@ -29,6 +29,7 @@ and user password bind. A timeout message names the stage that stalled.
 `AD_TIMEOUT_SECONDS` sets the per-stage limit (default 8 seconds). Logs
 never include passwords or the search account DN.
 
+
 Approved operators manage only their own SSH public key at `/admin/keys` and
 see their own key edit history. `canManageOperator` permits sending invitations
 at `/admin/invite` and viewing the invitation journal at `/admin/journal`.

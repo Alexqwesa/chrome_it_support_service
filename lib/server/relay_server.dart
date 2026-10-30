@@ -32,10 +32,12 @@ class RelayServerConfig {
         adTimeout = Duration(seconds: _int(env, 'AD_TIMEOUT_SECONDS', 8)),
         ldapBindDn = env['LDAP_BIND_DN']?.trim() ?? '',
         ldapBindPassword = env['LDAP_BIND_PASSWORD'] ?? '',
+        ldapCaCertFile = _optionalPath(env, 'LDAP_CA_CERT_FILE'),
         bootstrapAdminEmail = env['ADMIN_BOOTSTRAP_EMAIL']?.trim(),
         stateDir = env['OPERATOR_STATE_DIR'] ?? 'deploy/operator_state',
         helpLocalesDir = env['HELP_LOCALES_DIR'] ?? 'deploy/help_locales',
-        publicBaseUrl = env['PUBLIC_BASE_URL'] ?? 'https://softapp.vietsov.com.vn:9999',
+        publicBaseUrl =
+            env['PUBLIC_BASE_URL'] ?? 'https://softapp.vietsov.com.vn:9999',
         smtpHost = env['SMTP_SERVER']?.trim() ?? '',
         smtpPort = _int(env, 'SMTP_PORT', 25),
         smtpFrom = env['SMTP_FROM']?.trim() ?? '',
@@ -74,6 +76,7 @@ class RelayServerConfig {
   final Duration adTimeout;
   final String ldapBindDn;
   final String ldapBindPassword;
+  final String? ldapCaCertFile;
   final String? bootstrapAdminEmail;
   final String stateDir;
   final String helpLocalesDir;
@@ -155,17 +158,38 @@ class RelayServer {
   Future<void> start() async {
     if (config.smtpHost.isNotEmpty || config.smtpFrom.isNotEmpty) {
       final publicUri = Uri.tryParse(config.publicBaseUrl);
-      if (publicUri == null || publicUri.scheme != 'https' || publicUri.host.isEmpty) {
-        throw StateError('PUBLIC_BASE_URL must be an absolute HTTPS URL when SMTP is configured.');
+      if (publicUri == null ||
+          publicUri.scheme != 'https' ||
+          publicUri.host.isEmpty) {
+        throw StateError(
+            'PUBLIC_BASE_URL must be an absolute HTTPS URL when SMTP is configured.');
       }
     }
     if (config.adConfigured &&
         (config.ldapBindDn.isEmpty || config.ldapBindPassword.isEmpty)) {
-      throw StateError('LDAP_BIND_DN and LDAP_BIND_PASSWORD are required when DOMAIN_HOSTNAME is set.');
+      throw StateError(
+          'LDAP_BIND_DN and LDAP_BIND_PASSWORD are required when DOMAIN_HOSTNAME is set.');
     }
-    await _operators.initialize(config.adConfigured ? config.bootstrapAdminEmail : null);
-    if (config.adConfigured && !_operators.users.any((user) => !user.isDeleted && user.canManageAdmin)) {
-      throw StateError('No active AD administrator. Configure ADMIN_BOOTSTRAP_EMAIL before first startup.');
+    if (config.adConfigured && config.ldapCaCertFile != null) {
+      final path = config.ldapCaCertFile!;
+      if (!await File(path).exists()) {
+        throw StateError(
+            'LDAP_CA_CERT_FILE does not exist or is not a file: $path');
+      }
+      try {
+        SecurityContext.defaultContext.setTrustedCertificates(path);
+      } on TlsException catch (error) {
+        throw StateError('Cannot load LDAP_CA_CERT_FILE $path: $error');
+      }
+      stdout.writeln('LDAPS CA certificates loaded from $path.');
+    }
+    await _operators
+        .initialize(config.adConfigured ? config.bootstrapAdminEmail : null);
+    if (config.adConfigured &&
+        !_operators.users
+            .any((user) => !user.isDeleted && user.canManageAdmin)) {
+      throw StateError(
+          'No active AD administrator. Configure ADMIN_BOOTSTRAP_EMAIL before first startup.');
     }
     await _help.load();
     _operatorWeb = OperatorWeb(
@@ -196,7 +220,8 @@ class RelayServer {
       adminPassword: config.adminPassword,
       publicBaseUrl: config.publicBaseUrl,
       downloadUrl: config.clientDownloadUrl,
-      reloadSshd: config.sshdReloadSignalFile == null ? null : _signalSshdReload,
+      reloadSshd:
+          config.sshdReloadSignalFile == null ? null : _signalSshdReload,
     );
     _httpServer = await HttpServer.bind(config.httpBind, config.httpPort);
     _httpServer!.listen(_handleRequest);
@@ -238,9 +263,11 @@ class RelayServer {
             sshPort: config.sshRelayPort,
             clientDownloadUrl: config.clientDownloadUrl,
             canDisconnect: _operatorWeb.principal(request) != null &&
-                _operatorWeb.canManageOperator(_operatorWeb.principal(request)!),
+                _operatorWeb
+                    .canManageOperator(_operatorWeb.principal(request)!),
             csrfToken: _operatorWeb.principal(request) != null
-                ? _operatorWeb.csrfToken(request) : null,
+                ? _operatorWeb.csrfToken(request)
+                : null,
           ),
         );
         return await request.response.close();
@@ -325,18 +352,24 @@ class RelayServer {
         if (!await _requireAdmin(request)) return;
         if (config.adConfigured &&
             !_operatorWeb.canManageOperator(_operatorWeb.principal(request)!)) {
-          return await _text(request, HttpStatus.forbidden, 'Operator permission required.');
+          return await _text(
+              request, HttpStatus.forbidden, 'Operator permission required.');
         }
         if (config.adConfigured && !_operatorWeb.checkApiCsrf(request)) {
-          return await _text(request, HttpStatus.forbidden, 'Invalid form token.');
+          return await _text(
+              request, HttpStatus.forbidden, 'Invalid form token.');
         }
         final id = Uri.decodeComponent(match.group(1)!);
         if (_registry[id] == null) {
-          return await _text(request, HttpStatus.notFound, 'Session not found.');
+          return await _text(
+              request, HttpStatus.notFound, 'Session not found.');
         }
         await disconnect(id, reason: 'disconnected by administrator');
-        await _operators.journal(_operatorWeb.principal(request)!, 'session_disconnected', subject: id);
-        return await _json(request, HttpStatus.ok, <String, Object?>{'ok': true});
+        await _operators.journal(
+            _operatorWeb.principal(request)!, 'session_disconnected',
+            subject: id);
+        return await _json(
+            request, HttpStatus.ok, <String, Object?>{'ok': true});
       }
       return await _text(request, HttpStatus.notFound, 'Not found.');
     } catch (error, stackTrace) {
