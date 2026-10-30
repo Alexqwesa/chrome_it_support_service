@@ -48,6 +48,7 @@ class LdapCredentialValidator {
     required this.bindPassword,
     required this.timeout,
     this.acceptBadCertificate = false,
+    this.debugLogging = false,
   });
 
   final String domain;
@@ -57,6 +58,7 @@ class LdapCredentialValidator {
   final String bindPassword;
   final Duration timeout;
   final bool acceptBadCertificate;
+  final bool debugLogging;
 
   LdapConnection _connection() => LdapConnection(
         host: host,
@@ -89,9 +91,10 @@ class LdapCredentialValidator {
       final entries = await _stage(
           traceId, 'directory results', () => result.stream.toList());
       final match = uniqueActiveLdapEmailEntry(entries, email);
-      stdout.writeln(
-          'AD login [$traceId] directory returned ${entries.length} entries; '
-          'unique active exact-email match: ${match != null}.');
+      if (debugLogging) {
+        stdout.writeln('AD login [$traceId] directory returned ${entries.length} entries; '
+            'unique active exact-email match: ${match != null}.');
+      }
       if (match == null || ldapAttribute(match, 'sAMAccountName') == null) {
         return false;
       }
@@ -117,11 +120,14 @@ class LdapCredentialValidator {
   Future<T> _stage<T>(
       String traceId, String name, Future<T> Function() action) async {
     final timer = Stopwatch()..start();
-    stdout.writeln('AD login [$traceId] $name started.');
+    if (debugLogging) {
+      stdout.writeln('AD login [$traceId] $name started.');
+    }
     try {
       final value = await action().timeout(timeout);
-      stdout.writeln(
-          'AD login [$traceId] $name completed in ${timer.elapsedMilliseconds} ms.');
+      if (debugLogging) {
+        stdout.writeln('AD login [$traceId] $name completed in ${timer.elapsedMilliseconds} ms.');
+      }
       return value;
     } on TimeoutException {
       stderr.writeln(

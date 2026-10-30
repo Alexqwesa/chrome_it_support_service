@@ -12,6 +12,7 @@ class InvitationMailer {
     required this.password,
     required this.ssl,
     required this.allowStartTls,
+    this.acceptBadCertificate = false,
   });
 
   final String host;
@@ -21,6 +22,7 @@ class InvitationMailer {
   final String? password;
   final bool ssl;
   final bool allowStartTls;
+  final bool acceptBadCertificate;
 
   bool get configured => host.isNotEmpty && from.isNotEmpty;
 
@@ -40,6 +42,7 @@ class InvitationMailer {
         username: user,
         password: password,
         ssl: ssl,
+        ignoreBadCertificate: acceptBadCertificate,
         allowInsecure: !allowStartTls);
     await send(message, server, timeout: const Duration(seconds: 30));
     stdout.writeln('Invitation SMTP accepted for $to');

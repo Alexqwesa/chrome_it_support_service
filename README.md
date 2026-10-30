@@ -23,7 +23,7 @@ database has never existed. Subsequent accounts and permissions are managed at
 `/admin/operators`. The first administrator has both permissions. New accounts
 have neither `canManageAdmin` nor `canManageOperator` by default.
 
-AD login logs a short trace ID, LDAPS host and port, and timing for search
+With `LOG_LEVEL=debug`, AD login logs a short trace ID, LDAPS host and port, and timing for search
 connection, search account bind, directory search/results, user connection,
 and user password bind. A timeout message names the stage that stalled.
 `AD_TIMEOUT_SECONDS` sets the per-stage limit (default 8 seconds). Logs
@@ -51,6 +51,12 @@ warning, but does not change how the EXE starts. Send attempts, successes, and
 failures include the AD sender, recipient, checkbox value, and UTC time in the
 persistent journal. SMTP certificate validation is enabled; `SMTP_REQUIRE_TLS`
 defaults to `true`.
+
+If the SMTP certificate does not match `SMTP_SERVER`, use its correct DNS name
+or replace the certificate. For temporary SimOps compatibility,
+`SMTP_ACCEPT_BAD_CERTIFICATE=true` disables certificate verification and may
+expose SMTP credentials and messages to an attacker. It defaults to false and
+does not disable TLS or make the connection authenticated.
 
 If `DOMAIN_HOSTNAME` is unset, the existing `ADMIN_PASSWORD` Basic login remains
 available. When AD is configured, the shared password is ignored even if AD

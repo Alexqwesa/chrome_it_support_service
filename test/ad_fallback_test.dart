@@ -5,6 +5,21 @@ import 'package:chrome_it_support_service/server/relay_server.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('SMTP certificate bypass and debug logging are opt-in', () {
+    final defaults = RelayServerConfig.fromEnvironment({
+      'AGENT_ENROLLMENT_TOKEN': 'test-token',
+    });
+    final enabled = RelayServerConfig.fromEnvironment({
+      'AGENT_ENROLLMENT_TOKEN': 'test-token',
+      'SMTP_ACCEPT_BAD_CERTIFICATE': 'true',
+      'LOG_LEVEL': 'debug',
+    });
+    expect(defaults.smtpAcceptBadCertificate, isFalse);
+    expect(defaults.debugLogging, isFalse);
+    expect(enabled.smtpAcceptBadCertificate, isTrue);
+    expect(enabled.debugLogging, isTrue);
+  });
+
   test('bad LDAP certificates require explicit opt-in', () {
     final defaults = RelayServerConfig.fromEnvironment({
       'AGENT_ENROLLMENT_TOKEN': 'test-token',

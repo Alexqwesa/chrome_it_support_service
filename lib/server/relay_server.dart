@@ -30,6 +30,7 @@ class RelayServerConfig {
         adDomain = env['DOMAIN_NAME']?.trim() ?? 'vietsov.com.vn',
         adPort = _int(env, 'DOMAIN_PORT', 636),
         adTimeout = Duration(seconds: _int(env, 'AD_TIMEOUT_SECONDS', 8)),
+        debugLogging = (env['LOG_LEVEL'] ?? 'info').trim().toLowerCase() == 'debug',
         ldapBindDn = env['LDAP_BIND_DN']?.trim() ?? '',
         ldapBindPassword = env['LDAP_BIND_PASSWORD'] ?? '',
         ldapCaCertFile = _optionalPath(env, 'LDAP_CA_CERT_FILE'),
@@ -46,6 +47,7 @@ class RelayServerConfig {
         smtpPassword = env['SMTP_PASSWORD'],
         smtpSsl = _bool(env, 'SMTP_SSL', false),
         smtpRequireTls = _bool(env, 'SMTP_REQUIRE_TLS', true),
+        smtpAcceptBadCertificate = _bool(env, 'SMTP_ACCEPT_BAD_CERTIFICATE', false),
         authorizedKeysFile =
             env['AUTHORIZED_KEYS_FILE'] ?? 'deploy/authorized_keys',
         sshdReloadSignalFile = _optionalPath(env, 'SSHD_RELOAD_SIGNAL_FILE'),
@@ -75,6 +77,7 @@ class RelayServerConfig {
   final String adDomain;
   final int adPort;
   final Duration adTimeout;
+  final bool debugLogging;
   final String ldapBindDn;
   final String ldapBindPassword;
   final String? ldapCaCertFile;
@@ -90,6 +93,7 @@ class RelayServerConfig {
   final String? smtpPassword;
   final bool smtpSsl;
   final bool smtpRequireTls;
+  final bool smtpAcceptBadCertificate;
   bool get adConfigured => adHost.isNotEmpty;
   final String authorizedKeysFile;
   final String? sshdReloadSignalFile;
@@ -188,6 +192,9 @@ class RelayServer {
     if (config.adConfigured && config.ldapAcceptBadCertificate) {
       stderr.writeln('WARNING: LDAP_ACCEPT_BAD_CERTIFICATE is enabled. Invalid LDAPS certificates are accepted; credentials may be exposed to an attacker.');
     }
+    if (config.smtpHost.isNotEmpty && config.smtpAcceptBadCertificate) {
+      stderr.writeln('WARNING: SMTP_ACCEPT_BAD_CERTIFICATE is enabled. Invalid SMTP certificates are accepted; credentials and messages may be exposed to an attacker.');
+    }
     await _operators
         .initialize(config.adConfigured ? config.bootstrapAdminEmail : null);
     if (config.adConfigured &&
@@ -208,6 +215,7 @@ class RelayServer {
         password: config.smtpPassword,
         ssl: config.smtpSsl,
         allowStartTls: config.smtpRequireTls,
+        acceptBadCertificate: config.smtpAcceptBadCertificate,
       ),
       auth: config.adConfigured
           ? OperatorAuth(
@@ -217,6 +225,7 @@ class RelayServer {
               port: config.adPort,
               timeout: config.adTimeout,
               acceptBadCertificate: config.ldapAcceptBadCertificate,
+              debugLogging: config.debugLogging,
               bindDn: config.ldapBindDn,
               bindPassword: config.ldapBindPassword,
               secureCookie: Uri.parse(config.publicBaseUrl).scheme == 'https',

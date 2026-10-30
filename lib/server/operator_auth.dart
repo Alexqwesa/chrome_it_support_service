@@ -15,6 +15,7 @@ class OperatorAuth {
     required this.secureCookie,
     this.timeout = const Duration(seconds: 8),
     this.acceptBadCertificate = false,
+    this.debugLogging = false,
   });
 
   final OperatorStore store;
@@ -26,6 +27,7 @@ class OperatorAuth {
   final bool secureCookie;
   final Duration timeout;
   final bool acceptBadCertificate;
+  final bool debugLogging;
   final Map<String, _LoginSession> _sessions = {};
   final Map<String, List<DateTime>> _failures = {};
   final Random _random = Random.secure();
@@ -82,9 +84,11 @@ class OperatorAuth {
           'AD login [$traceId] rejected: too many recent failures for $email.');
       return false;
     }
-    stdout.writeln(
+    if (debugLogging) {
+      stdout.writeln(
         'AD login [$traceId] starting for $email via LDAPS $host:$port '
         '(timeout ${timeout.inSeconds}s per stage).');
+    }
     try {
       final verified = await LdapCredentialValidator(
         domain: domain,
@@ -94,6 +98,7 @@ class OperatorAuth {
         bindPassword: bindPassword,
         timeout: timeout,
         acceptBadCertificate: acceptBadCertificate,
+        debugLogging: debugLogging,
       ).validate(email, password, traceId);
       if (!verified) return _reject(email);
       final id = _token();
